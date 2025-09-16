@@ -7,7 +7,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Download, FileText, CheckCircle, Loader2 } from "lucide-react"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Input } from "@/components/ui/input"
+import { Download, FileText, CheckCircle, Loader2, Database } from "lucide-react"
 import type { CSVData, FieldConfig, DelimiterType } from "@/app/page"
 
 interface ExportControlsProps {
@@ -16,25 +18,28 @@ interface ExportControlsProps {
   delimiter: DelimiterType
 }
 
+type SQLDatabaseType = "ansi" | "mysql" | "postgresql" | "sqlite" | "sqlserver"
+type ExportFormatType = "csv" | "tsv" | "txt" | "sql"
+
 export function ExportControls({ csvData, fields, delimiter }: ExportControlsProps) {
-  const [exportFormat, setExportFormat] = useState<"csv" | "tsv" | "txt">("csv")
+  const [exportFormat, setExportFormat] = useState<ExportFormatType>("csv")
   const [outputDelimiter, setOutputDelimiter] = useState<DelimiterType>(delimiter)
   const [isExporting, setIsExporting] = useState(false)
   const [exportComplete, setExportComplete] = useState(false)
+  const [sqlDatabaseType, setSqlDatabaseType] = useState<SQLDatabaseType>("ansi")
+  const [createTable, setCreateTable] = useState(true)
+  const [tableName, setTableName] = useState("dados_importados")
 
   const selectedFields = fields.filter((field) => field.selected).sort((a, b) => a.order - b.order)
 
   const formatData = () => {
-    // Get column indices for selected fields
     const columnIndices = selectedFields
       .map((field) => csvData.headers.indexOf(field.name))
       .filter((index) => index !== -1)
 
-    // Extract headers and data for selected columns
     const headers = selectedFields.map((field) => field.name)
     const rows = csvData.rows.map((row) => columnIndices.map((index) => row[index] || ""))
 
-    // Apply formatting
     const formattedRows = rows.map((row) =>
       row.map((cell, cellIndex) => {
         const field = selectedFields[cellIndex]
@@ -48,7 +53,6 @@ export function ExportControls({ csvData, fields, delimiter }: ExportControlsPro
             const curr = Number.parseFloat(cell)
             return isNaN(curr) ? cell : curr.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
           case "date":
-            // Simple date formatting
             if (cell.match(/^\d{4}-\d{2}-\d{2}$/)) {
               const [year, month, day] = cell.split("-")
               return `${day}/${month}/${year}`
@@ -61,6 +65,150 @@ export function ExportControls({ csvData, fields, delimiter }: ExportControlsPro
     )
 
     return { headers, rows: formattedRows }
+  }
+
+  const generateSQL = (data: { headers: string[]; rows: string[][] }) => {
+    const sanitizeIdentifier = (name: string) => {
+      return name.replace(/[^a-zA-Z0-9_]/g, "_").toLowerCase()
+    }
+
+    const getSQLType = (field: FieldConfig) => {
+      switch (sqlDatabaseType) {
+        case "mysql":
+          switch (field.format) {
+            case "number":
+              return "DECIMAL(10,2)"
+            case "currency":
+              return "DECIMAL(10,2)"
+            case "date":
+              return "DATE"
+            default:
+              return "VARCHAR(255)"
+          }
+        case "postgresql":
+          switch (field.format) {
+            case "number":
+              return "NUMERIC(10,2)"
+            case "currency":
+              return "NUMERIC(10,2)"
+            case "date":
+              return "DATE"
+            default:
+              return "VARCHAR(255)"
+          }
+        case "sqlite":
+          switch (field.format) {
+            case "number":
+              return "REAL"
+            case "currency":
+              return "REAL"
+            case "date":
+              return "TEXT"
+            default:
+              return "TEXT"
+          }
+        case "sqlserver":
+          switch (field.format) {
+            case "number":
+              return "DECIMAL(10,2)"
+            case "currency":
+              return "MONEY"
+            case "date":
+              return "DATE"
+            default:
+              return "NVARCHAR(255)"
+          }
+        default: // ANSI
+          switch (field.format) {
+            case "number":
+              return "DECIMAL(10,2)"
+            case "currency":
+              return "DECIMAL(10,2)"
+            case "date":
+              return "DATE"
+            default:
+              return "VARCHAR(255)"
+          }
+      }
+    }
+
+    const escapeValue = (value: string, field: FieldConfig) => {
+      if (value === "" || value === null || value === undefined) {
+        return "NULL"
+      }
+
+      if (field.format === "number" || field.format === "currency") {
+        const num = Number.parseFloat(value.replace(/[^\d.-]/g, ""))
+        return isNaN(num) ? "NULL" : num.toString()
+      }
+
+      return `'${value.replace(/'/g, "''")}'`
+    }
+
+    let sql = ""
+
+    if (createTable) {
+      const sanitizedTableName = sanitizeIdentifier(tableName)
+      sql += `-- Criação da tabela\n`
+
+      if (sqlDatabaseType === "mysql") {
+        sql += `DROP TABLE IF EXISTS \`${sanitizedTableName}\`;\n`
+        sql += `CREATE TABLE \`${sanitizedTableName}\` (\n`
+      } else if (sqlDatabaseType === "postgresql") {
+        sql += `DROP TABLE IF EXISTS "${sanitizedTableName}" CASCADE;\n`
+        sql += `CREATE TABLE "${sanitizedTableName}" (\n`
+      } else {
+        sql += `DROP TABLE IF EXISTS ${sanitizedTableName};\n`
+        sql += `CREATE TABLE ${sanitizedTableName} (\n`
+      }
+
+      const columns = selectedFields.map((field, index) => {
+        const columnName = sanitizeIdentifier(field.name)
+        const sqlType = getSQLType(field)
+        const isLast = index === selectedFields.length - 1
+
+        if (sqlDatabaseType === "mysql") {
+          return `  \`${columnName}\` ${sqlType}${isLast ? "" : ","}`
+        } else if (sqlDatabaseType === "postgresql") {
+          return `  "${columnName}" ${sqlType}${isLast ? "" : ","}`
+        } else {
+          return `  ${columnName} ${sqlType}${isLast ? "" : ","}`
+        }
+      })
+
+      sql += columns.join("\n") + "\n"
+      sql += ");\n\n"
+    }
+
+    sql += `-- Inserção dos dados\n`
+
+    const sanitizedTableName = sanitizeIdentifier(tableName)
+    const columnNames = selectedFields
+      .map((field) => {
+        const columnName = sanitizeIdentifier(field.name)
+        if (sqlDatabaseType === "mysql") {
+          return `\`${columnName}\``
+        } else if (sqlDatabaseType === "postgresql") {
+          return `"${columnName}"`
+        } else {
+          return columnName
+        }
+      })
+      .join(", ")
+
+    data.rows.forEach((row) => {
+      const values = row.map((cell, index) => escapeValue(cell, selectedFields[index])).join(", ")
+
+      if (sqlDatabaseType === "mysql") {
+        sql += `INSERT INTO \`${sanitizedTableName}\` (${columnNames}) VALUES (${values});\n`
+      } else if (sqlDatabaseType === "postgresql") {
+        sql += `INSERT INTO "${sanitizedTableName}" (${columnNames}) VALUES (${values});\n`
+      } else {
+        sql += `INSERT INTO ${sanitizedTableName} (${columnNames}) VALUES (${values});\n`
+      }
+    })
+
+    return sql
   }
 
   const generateCSV = (data: { headers: string[]; rows: string[][] }, delimiter: DelimiterType) => {
@@ -82,19 +230,29 @@ export function ExportControls({ csvData, fields, delimiter }: ExportControlsPro
     setExportComplete(false)
 
     try {
-      // Simulate processing time
       await new Promise((resolve) => setTimeout(resolve, 1000))
 
       const formattedData = formatData()
-      const csvContent = generateCSV(formattedData, outputDelimiter)
+      let content: string
+      let filename: string
+      let mimeType: string
 
-      // Create and download file
-      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
+      if (exportFormat === "sql") {
+        content = generateSQL(formattedData)
+        filename = `${tableName}.sql`
+        mimeType = "text/sql;charset=utf-8;"
+      } else {
+        content = generateCSV(formattedData, outputDelimiter)
+        filename = `dados_processados.${exportFormat}`
+        mimeType = "text/csv;charset=utf-8;"
+      }
+
+      const blob = new Blob([content], { type: mimeType })
       const link = document.createElement("a")
       const url = URL.createObjectURL(blob)
 
       link.setAttribute("href", url)
-      link.setAttribute("download", `dados_processados.${exportFormat}`)
+      link.setAttribute("download", filename)
       link.style.visibility = "hidden"
       document.body.appendChild(link)
       link.click()
@@ -123,19 +281,34 @@ export function ExportControls({ csvData, fields, delimiter }: ExportControlsPro
     }
   }
 
+  const getSQLDatabaseLabel = (type: SQLDatabaseType) => {
+    switch (type) {
+      case "ansi":
+        return "ANSI SQL (Padrão)"
+      case "mysql":
+        return "MySQL"
+      case "postgresql":
+        return "PostgreSQL"
+      case "sqlite":
+        return "SQLite"
+      case "sqlserver":
+        return "SQL Server"
+      default:
+        return type
+    }
+  }
+
   return (
     <div className="space-y-6">
-      {/* Export Configuration */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Configurações de Exportação</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Format Selection */}
             <div className="space-y-2">
               <Label htmlFor="export-format">Formato do arquivo</Label>
-              <Select value={exportFormat} onValueChange={(value) => setExportFormat(value as any)}>
+              <Select value={exportFormat} onValueChange={(value) => setExportFormat(value as ExportFormatType)}>
                 <SelectTrigger id="export-format">
                   <SelectValue />
                 </SelectTrigger>
@@ -143,34 +316,76 @@ export function ExportControls({ csvData, fields, delimiter }: ExportControlsPro
                   <SelectItem value="csv">CSV (Comma Separated Values)</SelectItem>
                   <SelectItem value="tsv">TSV (Tab Separated Values)</SelectItem>
                   <SelectItem value="txt">TXT (Texto simples)</SelectItem>
+                  <SelectItem value="sql">SQL (Structured Query Language)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
-            {/* Delimiter Selection */}
-            <div className="space-y-2">
-              <Label htmlFor="output-delimiter">Delimitador de saída</Label>
-              <Select value={outputDelimiter} onValueChange={(value) => setOutputDelimiter(value as DelimiterType)}>
-                <SelectTrigger id="output-delimiter">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value=",">{getDelimiterLabel(",")}</SelectItem>
-                  <SelectItem value=";">{getDelimiterLabel(";")}</SelectItem>
-                  <SelectItem value="\t">{getDelimiterLabel("\t")}</SelectItem>
-                  <SelectItem value="|">{getDelimiterLabel("|")}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            {exportFormat !== "sql" && (
+              <div className="space-y-2">
+                <Label htmlFor="output-delimiter">Delimitador de saída</Label>
+                <Select value={outputDelimiter} onValueChange={(value) => setOutputDelimiter(value as DelimiterType)}>
+                  <SelectTrigger id="output-delimiter">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value=",">{getDelimiterLabel(",")}</SelectItem>
+                    <SelectItem value=";">{getDelimiterLabel(";")}</SelectItem>
+                    <SelectItem value="\t">{getDelimiterLabel("\t")}</SelectItem>
+                    <SelectItem value="|">{getDelimiterLabel("|")}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {exportFormat === "sql" && (
+              <div className="space-y-2">
+                <Label htmlFor="sql-database">Formato do banco de dados</Label>
+                <Select value={sqlDatabaseType} onValueChange={(value) => setSqlDatabaseType(value as SQLDatabaseType)}>
+                  <SelectTrigger id="sql-database">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ansi">{getSQLDatabaseLabel("ansi")}</SelectItem>
+                    <SelectItem value="mysql">{getSQLDatabaseLabel("mysql")}</SelectItem>
+                    <SelectItem value="postgresql">{getSQLDatabaseLabel("postgresql")}</SelectItem>
+                    <SelectItem value="sqlite">{getSQLDatabaseLabel("sqlite")}</SelectItem>
+                    <SelectItem value="sqlserver">{getSQLDatabaseLabel("sqlserver")}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
+
+          {exportFormat === "sql" && (
+            <div className="space-y-4 pt-4 border-t">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="create-table"
+                  checked={createTable}
+                  onCheckedChange={(checked) => setCreateTable(checked as boolean)}
+                />
+                <Label htmlFor="create-table">Incluir comando CREATE TABLE</Label>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="table-name">Nome da tabela</Label>
+                <Input
+                  id="table-name"
+                  value={tableName}
+                  onChange={(e) => setTableName(e.target.value)}
+                  placeholder="nome_da_tabela"
+                />
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {/* Export Summary */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base flex items-center space-x-2">
-            <FileText className="w-4 h-4" />
+            {exportFormat === "sql" ? <Database className="w-4 h-4" /> : <FileText className="w-4 h-4" />}
             <span>Resumo da Exportação</span>
           </CardTitle>
         </CardHeader>
@@ -189,14 +404,26 @@ export function ExportControls({ csvData, fields, delimiter }: ExportControlsPro
               <div className="text-sm text-muted-foreground">Formato</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-primary">{getDelimiterLabel(outputDelimiter).split(" ")[0]}</div>
-              <div className="text-sm text-muted-foreground">Delimitador</div>
+              {exportFormat === "sql" ? (
+                <>
+                  <div className="text-2xl font-bold text-primary">
+                    {getSQLDatabaseLabel(sqlDatabaseType).split(" ")[0]}
+                  </div>
+                  <div className="text-sm text-muted-foreground">Banco</div>
+                </>
+              ) : (
+                <>
+                  <div className="text-2xl font-bold text-primary">
+                    {getDelimiterLabel(outputDelimiter).split(" ")[0]}
+                  </div>
+                  <div className="text-sm text-muted-foreground">Delimitador</div>
+                </>
+              )}
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Selected Fields */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Campos Selecionados</CardTitle>
@@ -214,7 +441,6 @@ export function ExportControls({ csvData, fields, delimiter }: ExportControlsPro
         </CardContent>
       </Card>
 
-      {/* Export Button */}
       <div className="flex flex-col items-center space-y-4">
         <Button
           onClick={handleExport}
@@ -230,7 +456,7 @@ export function ExportControls({ csvData, fields, delimiter }: ExportControlsPro
           ) : (
             <>
               <Download className="w-4 h-4 mr-2" />
-              Baixar Arquivo Processado
+              {exportFormat === "sql" ? "Baixar Script SQL" : "Baixar Arquivo Processado"}
             </>
           )}
         </Button>
