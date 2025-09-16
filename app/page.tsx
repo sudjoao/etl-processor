@@ -2,13 +2,14 @@
 
 import { useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
 import { FileUpload } from "@/components/csv/file-upload"
 import { DelimiterConfig } from "@/components/csv/delimiter-config"
 import { FieldSelector } from "@/components/csv/field-selector"
 import { DataFormatter } from "@/components/csv/data-formatter"
 import { PreviewTable } from "@/components/csv/preview-table"
 import { ExportControls } from "@/components/csv/export-controls"
-import { Upload, Settings, Filter, Palette, Eye, Download } from "lucide-react"
+import { Upload, Settings, Filter, Palette, Eye, Download, ChevronLeft, ChevronRight } from "lucide-react"
 
 export type DelimiterType = "," | ";" | "\t" | "|"
 
@@ -39,6 +40,155 @@ export default function CSVProcessor() {
     { id: 6, title: "Exportar", icon: Download, description: "Baixar resultado" },
   ]
 
+  const goToStep = (stepId: number) => {
+    setCurrentStep(stepId)
+  }
+
+  const goToPreviousStep = () => {
+    if (currentStep > 1) {
+      setCurrentStep(currentStep - 1)
+    }
+  }
+
+  const goToNextStep = () => {
+    if (currentStep < steps.length) {
+      setCurrentStep(currentStep + 1)
+    }
+  }
+
+  const renderCurrentStep = () => {
+    switch (currentStep) {
+      case 1:
+        return (
+          <Card className="ring-2 ring-primary">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Upload className="w-5 h-5" />
+                Upload do Arquivo CSV
+              </CardTitle>
+              <CardDescription>Selecione ou arraste seu arquivo CSV para começar o processamento</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <FileUpload
+                onFileLoad={(data) => {
+                  setCsvData(data)
+                  goToNextStep()
+                }}
+              />
+            </CardContent>
+          </Card>
+        )
+
+      case 2:
+        return csvData ? (
+          <Card className="ring-2 ring-primary">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Settings className="w-5 h-5" />
+                Configuração do Delimitador
+              </CardTitle>
+              <CardDescription>Escolha o delimitador usado no seu arquivo CSV</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <DelimiterConfig
+                delimiter={delimiter}
+                onDelimiterChange={(newDelimiter) => {
+                  setDelimiter(newDelimiter)
+                  goToNextStep()
+                }}
+                csvData={csvData}
+              />
+            </CardContent>
+          </Card>
+        ) : null
+
+      case 3:
+        return csvData ? (
+          <Card className="ring-2 ring-primary">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Filter className="w-5 h-5" />
+                Seleção de Campos
+              </CardTitle>
+              <CardDescription>Escolha quais campos incluir e defina a ordem</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <FieldSelector
+                headers={csvData.headers}
+                fields={fields}
+                onFieldsChange={(newFields) => {
+                  setFields(newFields)
+                  goToNextStep()
+                }}
+              />
+            </CardContent>
+          </Card>
+        ) : null
+
+      case 4:
+        return fields.length > 0 ? (
+          <Card className="ring-2 ring-primary">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Palette className="w-5 h-5" />
+                Formatação de Dados
+              </CardTitle>
+              <CardDescription>Configure o formato de cada campo selecionado</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <DataFormatter
+                fields={fields}
+                onFieldsChange={(newFields) => {
+                  setFields(newFields)
+                  goToNextStep()
+                }}
+              />
+            </CardContent>
+          </Card>
+        ) : null
+
+      case 5:
+        return csvData && fields.some((f) => f.selected) ? (
+          <Card className="ring-2 ring-primary">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Eye className="w-5 h-5" />
+                Pré-visualização
+              </CardTitle>
+              <CardDescription>Visualize como ficará o arquivo final</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <PreviewTable
+                csvData={csvData}
+                fields={fields}
+                delimiter={delimiter}
+                onPreviewReady={() => goToNextStep()}
+              />
+            </CardContent>
+          </Card>
+        ) : null
+
+      case 6:
+        return csvData && fields.some((f) => f.selected) ? (
+          <Card className="ring-2 ring-accent">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Download className="w-5 h-5" />
+                Exportar Resultado
+              </CardTitle>
+              <CardDescription>Baixe o arquivo CSV processado</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ExportControls csvData={csvData} fields={fields} delimiter={delimiter} />
+            </CardContent>
+          </Card>
+        ) : null
+
+      default:
+        return null
+    }
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8">
@@ -63,20 +213,26 @@ export default function CSVProcessor() {
                 return (
                   <div key={step.id} className="flex items-center">
                     <div className="flex flex-col items-center min-w-0">
-                      <div
+                      <button
+                        onClick={() => {
+                          if (step.id <= currentStep || isCompleted) {
+                            goToStep(step.id)
+                          }
+                        }}
+                        disabled={step.id > currentStep && !isCompleted}
                         className={`
-                        w-12 h-12 rounded-full flex items-center justify-center border-2 transition-colors
+                        w-12 h-12 rounded-full flex items-center justify-center border-2 transition-colors cursor-pointer hover:scale-105 disabled:cursor-not-allowed disabled:hover:scale-100
                         ${
                           isActive
                             ? "bg-primary border-primary text-primary-foreground"
                             : isCompleted
-                              ? "bg-accent border-accent text-accent-foreground"
+                              ? "bg-accent border-accent text-accent-foreground hover:bg-accent/80"
                               : "bg-muted border-border text-muted-foreground"
                         }
                       `}
                       >
                         <Icon className="w-5 h-5" />
-                      </div>
+                      </button>
                       <div className="mt-2 text-center">
                         <div className={`text-sm font-medium ${isActive ? "text-primary" : "text-muted-foreground"}`}>
                           {step.title}
@@ -94,136 +250,36 @@ export default function CSVProcessor() {
           </div>
         </div>
 
-        {/* Main Content */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left Column - Controls */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Step 1: File Upload */}
-            <Card className={currentStep === 1 ? "ring-2 ring-primary" : ""}>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Upload className="w-5 h-5" />
-                  Upload do Arquivo CSV
-                </CardTitle>
-                <CardDescription>Selecione ou arraste seu arquivo CSV para começar o processamento</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <FileUpload
-                  onFileLoad={(data) => {
-                    setCsvData(data)
-                    setCurrentStep(2)
-                  }}
-                />
-              </CardContent>
-            </Card>
+        <div className="max-w-4xl mx-auto">
+          <div className="relative">
+            {/* Conteúdo do passo atual */}
+            <div className="min-h-[400px] flex items-start justify-center">{renderCurrentStep()}</div>
 
-            {/* Step 2: Delimiter Configuration */}
-            {csvData && (
-              <Card className={currentStep === 2 ? "ring-2 ring-primary" : ""}>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Settings className="w-5 h-5" />
-                    Configuração do Delimitador
-                  </CardTitle>
-                  <CardDescription>Escolha o delimitador usado no seu arquivo CSV</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <DelimiterConfig
-                    delimiter={delimiter}
-                    onDelimiterChange={(newDelimiter) => {
-                      setDelimiter(newDelimiter)
-                      setCurrentStep(3)
-                    }}
-                    csvData={csvData}
-                  />
-                </CardContent>
-              </Card>
-            )}
+            <div className="flex justify-between items-center mt-6">
+              <Button
+                variant="outline"
+                onClick={goToPreviousStep}
+                disabled={currentStep === 1}
+                className="flex items-center gap-2 bg-transparent"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                Anterior
+              </Button>
 
-            {/* Step 3: Field Selection */}
-            {csvData && currentStep >= 3 && (
-              <Card className={currentStep === 3 ? "ring-2 ring-primary" : ""}>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Filter className="w-5 h-5" />
-                    Seleção de Campos
-                  </CardTitle>
-                  <CardDescription>Escolha quais campos incluir e defina a ordem</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <FieldSelector
-                    headers={csvData.headers}
-                    fields={fields}
-                    onFieldsChange={(newFields) => {
-                      setFields(newFields)
-                      setCurrentStep(4)
-                    }}
-                  />
-                </CardContent>
-              </Card>
-            )}
+              <div className="text-sm text-muted-foreground">
+                Passo {currentStep} de {steps.length}
+              </div>
 
-            {/* Step 4: Data Formatting */}
-            {fields.length > 0 && currentStep >= 4 && (
-              <Card className={currentStep === 4 ? "ring-2 ring-primary" : ""}>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Palette className="w-5 h-5" />
-                    Formatação de Dados
-                  </CardTitle>
-                  <CardDescription>Configure o formato de cada campo selecionado</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <DataFormatter
-                    fields={fields}
-                    onFieldsChange={(newFields) => {
-                      setFields(newFields)
-                      setCurrentStep(5)
-                    }}
-                  />
-                </CardContent>
-              </Card>
-            )}
-          </div>
-
-          {/* Right Column - Preview and Export */}
-          <div className="space-y-6">
-            {/* Step 5: Preview */}
-            {csvData && fields.some((f) => f.selected) && currentStep >= 5 && (
-              <Card className={currentStep === 5 ? "ring-2 ring-primary" : ""}>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Eye className="w-5 h-5" />
-                    Pré-visualização
-                  </CardTitle>
-                  <CardDescription>Visualize como ficará o arquivo final</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <PreviewTable
-                    csvData={csvData}
-                    fields={fields}
-                    delimiter={delimiter}
-                    onPreviewReady={() => setCurrentStep(6)}
-                  />
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Step 6: Export */}
-            {currentStep >= 6 && csvData && fields.some((f) => f.selected) && (
-              <Card className="ring-2 ring-accent">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Download className="w-5 h-5" />
-                    Exportar Resultado
-                  </CardTitle>
-                  <CardDescription>Baixe o arquivo CSV processado</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <ExportControls csvData={csvData} fields={fields} delimiter={delimiter} />
-                </CardContent>
-              </Card>
-            )}
+              <Button
+                variant="outline"
+                onClick={goToNextStep}
+                disabled={currentStep === steps.length}
+                className="flex items-center gap-2 bg-transparent"
+              >
+                Próximo
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+            </div>
           </div>
         </div>
       </div>
