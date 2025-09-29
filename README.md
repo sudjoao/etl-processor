@@ -12,6 +12,7 @@ O projeto foi reestruturado para uma arquitetura moderna de microserviços:
 
 ## ✨ Funcionalidades
 
+### Processamento de Dados
 - 📁 Upload de arquivos CSV via drag & drop
 - ⚙️ Configuração flexível de delimitadores (vírgula, ponto e vírgula, tab, pipe)
 - 🎯 Seleção e reordenação de campos
@@ -19,6 +20,16 @@ O projeto foi reestruturado para uma arquitetura moderna de microserviços:
 - 👀 Pré-visualização dos dados processados
 - 🗄️ Geração de SQL para múltiplos SGBDs (MySQL, PostgreSQL, SQLite, SQL Server, ANSI)
 - 📥 Download de arquivos processados (CSV, TSV, TXT, SQL)
+
+### Modelagem de Data Warehouse ⭐ NOVO
+- 🏗️ Análise automática de esquemas SQL
+- ⭐ Geração de modelos dimensionais (Star Schema)
+- 📊 Identificação automática de tabelas fato e dimensão
+- 🔄 Suporte a Slowly Changing Dimensions (SCD)
+- 🎯 Recomendações de otimização
+- 📋 Geração de DDL para múltiplos SGBDs
+- 🔍 Visualização interativa do modelo dimensional
+- 🛠️ **Suporte aprimorado para dados de CSV**: Funciona com tabelas únicas geradas a partir de CSV
 
 ## 🛠️ Tecnologias Utilizadas
 
@@ -35,6 +46,9 @@ O projeto foi reestruturado para uma arquitetura moderna de microserviços:
 - Flask-CORS
 - Python 3.11
 - Gunicorn
+- SQLParse (análise de SQL)
+- Pandas & NumPy (processamento de dados)
+- Engine de Modelagem Dimensional personalizado
 
 ### DevOps
 - Docker
@@ -151,15 +165,62 @@ etl-processor/
 ├── app/                    # Páginas Next.js
 ├── components/             # Componentes React
 │   ├── csv/               # Componentes específicos para CSV
+│   ├── dw/                # Componentes de Data Warehouse ⭐
 │   └── ui/                # Componentes de UI reutilizáveis
 ├── lib/                   # Utilitários e serviços
 ├── backend/               # API Flask
 │   ├── app.py            # Aplicação principal
+│   ├── sql_analyzer.py   # Analisador de SQL ⭐
+│   ├── dimensional_modeling.py  # Engine de modelagem ⭐
+│   ├── star_schema_generator.py # Gerador de Star Schema ⭐
 │   ├── requirements.txt  # Dependências Python
 │   └── Dockerfile        # Container do backend
 ├── docker-compose.yml     # Orquestração dos serviços
 ├── Dockerfile.frontend    # Container do frontend
 └── README.md             # Este arquivo
+```
+
+## 🏗️ Modelagem de Data Warehouse
+
+### Funcionalidades Avançadas
+
+O ETL Processor agora inclui um engine completo de modelagem dimensional que automaticamente:
+
+- **Analisa esquemas SQL** e identifica padrões dimensionais
+- **Gera modelos Star Schema** com tabelas fato e dimensão
+- **Cria chaves substitutas** (surrogate keys) automaticamente
+- **Implementa SCD** (Slowly Changing Dimensions) Tipo 1 e 2
+- **Otimiza para diferentes SGBDs** (MySQL, PostgreSQL, SQL Server, etc.)
+
+### Como Usar a Modelagem DW
+
+1. **Gere o SQL** normalmente através do processamento CSV
+2. **Clique em "Modelagem DW"** após a geração do SQL
+3. **Visualize o modelo** dimensional proposto
+4. **Baixe os scripts DDL** otimizados para seu SGBD
+5. **Implemente no seu Data Warehouse**
+
+### Endpoints da API DW
+
+```bash
+# Analisar SQL
+POST /api/analyze-sql
+{
+  "sql": "CREATE TABLE vendas (...)"
+}
+
+# Gerar modelo dimensional
+POST /api/generate-dw-model
+{
+  "sql": "CREATE TABLE vendas (...)",
+  "dialect": "mysql"
+}
+
+# Obter recomendações
+GET /api/dw-recommendations
+
+# Metadados do sistema
+GET /api/dw-metadata
 ```
 
 ## 🎯 Como Usar
@@ -170,6 +231,7 @@ etl-processor/
 4. **Formatar Dados**: Configure o formato de cada campo (texto, número, moeda, data)
 5. **Pré-visualizar**: Veja como ficará o resultado final
 6. **Exportar**: Baixe o arquivo processado (CSV ou SQL)
+7. **Modelagem DW** ⭐: Gere automaticamente um modelo dimensional
 
 ## 🔧 Configurações Suportadas
 
@@ -215,6 +277,22 @@ etl-processor/
 3. Commit suas mudanças (`git commit -m 'Add some AmazingFeature'`)
 4. Push para a branch (`git push origin feature/AmazingFeature`)
 5. Abra um Pull Request
+
+## 🔧 Troubleshooting
+
+### Problema: "Could not generate a valid star schema from the provided SQL"
+
+**Solução**: Este erro foi corrigido na versão atual. O sistema agora:
+- ✅ Suporta tabelas únicas geradas a partir de CSV
+- ✅ Identifica automaticamente padrões dimensionais em dados planos
+- ✅ Cria modelos Star Schema mesmo com dados de controle de acesso
+- ✅ Ignora comentários SQL durante o parsing
+
+### Outros Problemas Comuns
+
+- **Porta 5001 em uso**: Execute `lsof -ti:5001 | xargs kill -9` para liberar a porta
+- **Docker não inicia**: Verifique se o Docker Desktop está rodando
+- **Erro de CORS**: Verifique se o backend está rodando na porta correta
 
 ## 📝 Licença
 

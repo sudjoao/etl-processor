@@ -9,9 +9,10 @@ import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
-import { Download, FileText, CheckCircle, Loader2, Database } from "lucide-react"
+import { Download, FileText, CheckCircle, Loader2, Database, BarChart3 } from "lucide-react"
 import type { CSVData, FieldConfig, DelimiterType } from "@/app/page"
 import { ApiService } from "@/lib/api"
+import { DataWarehouseViewer } from "@/components/dw/data-warehouse-viewer"
 
 interface ExportControlsProps {
   csvData: CSVData
@@ -31,6 +32,8 @@ export function ExportControls({ csvData, fields, delimiter }: ExportControlsPro
   const [sqlDatabaseType, setSqlDatabaseType] = useState<SQLDatabaseType>("ansi")
   const [createTable, setCreateTable] = useState(true)
   const [tableName, setTableName] = useState("dados_importados")
+  const [showDwViewer, setShowDwViewer] = useState(false)
+  const [generatedSql, setGeneratedSql] = useState<string | null>(null)
 
   const selectedFields = fields.filter((field) => field.selected).sort((a, b) => a.order - b.order)
 
@@ -255,6 +258,7 @@ export function ExportControls({ csvData, fields, delimiter }: ExportControlsPro
         }
 
         content = response.sql
+        setGeneratedSql(response.sql) // Save SQL for DW viewer
         filename = `${tableName}.sql`
         mimeType = "text/sql;charset=utf-8;"
       } else {
@@ -462,24 +466,38 @@ export function ExportControls({ csvData, fields, delimiter }: ExportControlsPro
       </Card>
 
       <div className="flex flex-col items-center space-y-4">
-        <Button
-          onClick={handleExport}
-          disabled={isExporting || selectedFields.length === 0}
-          size="lg"
-          className="w-full md:w-auto"
-        >
-          {isExporting ? (
-            <>
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              Processando...
-            </>
-          ) : (
-            <>
-              <Download className="w-4 h-4 mr-2" />
-              {exportFormat === "sql" ? "Baixar Script SQL" : "Baixar Arquivo Processado"}
-            </>
+        <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto">
+          <Button
+            onClick={handleExport}
+            disabled={isExporting || selectedFields.length === 0}
+            size="lg"
+            className="w-full md:w-auto"
+          >
+            {isExporting ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Processando...
+              </>
+            ) : (
+              <>
+                <Download className="w-4 h-4 mr-2" />
+                {exportFormat === "sql" ? "Baixar Script SQL" : "Baixar Arquivo Processado"}
+              </>
+            )}
+          </Button>
+
+          {exportFormat === "sql" && generatedSql && (
+            <Button
+              onClick={() => setShowDwViewer(true)}
+              variant="outline"
+              size="lg"
+              className="w-full md:w-auto"
+            >
+              <BarChart3 className="w-4 h-4 mr-2" />
+              Modelagem DW
+            </Button>
           )}
-        </Button>
+        </div>
 
         {exportComplete && (
           <Alert className="max-w-md">
@@ -498,6 +516,15 @@ export function ExportControls({ csvData, fields, delimiter }: ExportControlsPro
           </Alert>
         )}
       </div>
+
+      {showDwViewer && generatedSql && (
+        <div className="mt-8">
+          <DataWarehouseViewer
+            sqlContent={generatedSql}
+            onClose={() => setShowDwViewer(false)}
+          />
+        </div>
+      )}
     </div>
   )
 }

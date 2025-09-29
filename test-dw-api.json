@@ -1,0 +1,7 @@
+{
+  "sql": "CREATE TABLE vendas (\n    id INT PRIMARY KEY,\n    data_venda DATE,\n    cliente_id INT,\n    produto_id INT,\n    quantidade INT,\n    valor_unitario DECIMAL(10,2),\n    valor_total DECIMAL(10,2),\n    vendedor_id INT,\n    regiao VARCHAR(50),\n    status VARCHAR(20)\n);\n\nCREATE TABLE clientes (\n    id INT PRIMARY KEY,\n    nome VARCHAR(100),\n    email VARCHAR(100),\n    telefone VARCHAR(20),\n    cidade VARCHAR(50),\n    estado VARCHAR(2),\n    data_cadastro DATE\n);\n\nCREATE TABLE produtos (\n    id INT PRIMARY KEY,\n    nome VARCHAR(100),\n    categoria VARCHAR(50),\n    preco DECIMAL(10,2),\n    fornecedor VARCHAR(100)\n);",
+  "model_name": "VendasDataWarehouse",
+  "dialect": "mysql",
+  "include_indexes": true,
+  "include_partitioning": true
+}

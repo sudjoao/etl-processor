@@ -6,6 +6,9 @@ import re
 import logging
 from typing import List, Dict, Any, Optional
 from datetime import datetime
+from sql_analyzer import SQLAnalyzer
+from dimensional_modeling import DimensionalModelingEngine
+from star_schema_generator import StarSchemaGenerator, DatabaseDialect
 
 app = Flask(__name__)
 
@@ -313,6 +316,206 @@ def transform_csv_to_sql():
         return jsonify({"error": str(e)}), 400
     except Exception as e:
         return jsonify({"error": f"Internal server error: {str(e)}"}), 500
+
+# Data Warehouse Modeling Endpoints
+
+@app.route('/api/analyze-sql', methods=['POST', 'OPTIONS'])
+def analyze_sql():
+    """Analyze SQL structure for dimensional modeling"""
+    if request.method == 'OPTIONS':
+        return '', 200
+
+    try:
+        data = request.get_json()
+
+        if not data or 'sql' not in data:
+            return jsonify({'error': 'SQL content is required'}), 400
+
+        sql_content = data['sql']
+
+        # Initialize SQL analyzer
+        analyzer = SQLAnalyzer()
+
+        # Analyze SQL structure
+        analysis_result = analyzer.parse_sql(sql_content)
+
+        return jsonify({
+            'success': True,
+            'analysis': analysis_result
+        })
+
+    except Exception as e:
+        app.logger.error(f"Error analyzing SQL: {str(e)}")
+        return jsonify({'error': f'Error analyzing SQL: {str(e)}'}), 500
+
+
+@app.route('/api/generate-dw-model', methods=['POST', 'OPTIONS'])
+def generate_dw_model():
+    """Generate dimensional model (star schema) from SQL"""
+    if request.method == 'OPTIONS':
+        return '', 200
+
+    try:
+        data = request.get_json()
+
+        if not data or 'sql' not in data:
+            return jsonify({'error': 'SQL content is required'}), 400
+
+        sql_content = data['sql']
+        model_name = data.get('model_name', 'DataWarehouse')
+        dialect = data.get('dialect', 'mysql')
+        include_indexes = data.get('include_indexes', True)
+        include_partitioning = data.get('include_partitioning', False)
+
+        # Initialize dimensional modeling engine
+        modeling_engine = DimensionalModelingEngine()
+
+        # Create dimensional model
+        model_result = modeling_engine.create_dimensional_model(sql_content, model_name)
+
+        if 'error' in model_result:
+            return jsonify(model_result), 400
+
+        # Generate optimized DDL
+        try:
+            db_dialect = DatabaseDialect(dialect)
+        except ValueError:
+            db_dialect = DatabaseDialect.MYSQL
+
+        schema_generator = StarSchemaGenerator(db_dialect)
+        star_schema = modeling_engine.star_schemas[0] if modeling_engine.star_schemas else None
+
+        if star_schema:
+            complete_schema = schema_generator.generate_complete_schema(
+                star_schema,
+                include_indexes=include_indexes,
+                include_partitioning=include_partitioning
+            )
+            model_result['complete_schema'] = complete_schema
+
+            # Generate ETL templates
+            etl_templates = schema_generator.generate_etl_templates(star_schema)
+            model_result['etl_templates'] = etl_templates
+
+        return jsonify(model_result)
+
+    except Exception as e:
+        app.logger.error(f"Error generating DW model: {str(e)}")
+        return jsonify({'error': f'Error generating DW model: {str(e)}'}), 500
+
+
+@app.route('/api/dw-recommendations', methods=['POST', 'OPTIONS'])
+def get_dw_recommendations():
+    """Get recommendations for dimensional modeling optimization"""
+    if request.method == 'OPTIONS':
+        return '', 200
+
+    try:
+        data = request.get_json()
+
+        if not data or 'star_schema' not in data:
+            return jsonify({'error': 'Star schema data is required'}), 400
+
+        star_schema_data = data['star_schema']
+
+        # Generate advanced recommendations
+        recommendations = {
+            'performance': [
+                'Consider partitioning fact table by date for better query performance',
+                'Add bitmap indexes on low-cardinality dimension attributes',
+                'Implement aggregate tables for frequently queried metrics'
+            ],
+            'data_quality': [
+                'Implement data validation rules for dimension attributes',
+                'Add referential integrity constraints between fact and dimension tables',
+                'Consider implementing slowly changing dimensions (SCD) for historical tracking'
+            ],
+            'maintenance': [
+                'Schedule regular statistics updates for query optimization',
+                'Implement incremental ETL processes for large fact tables',
+                'Monitor and archive old partitions to manage storage'
+            ],
+            'analytics': [
+                'Create materialized views for common analytical queries',
+                'Consider implementing OLAP cubes for multidimensional analysis',
+                'Add calculated measures for business KPIs'
+            ]
+        }
+
+        # Analyze schema complexity
+        fact_table = star_schema_data.get('fact_table', {})
+        dimension_tables = star_schema_data.get('dimension_tables', [])
+
+        complexity_score = len(dimension_tables) * 10 + len(fact_table.get('measures', [])) * 5
+
+        if complexity_score > 100:
+            recommendations['scalability'] = [
+                'Consider implementing data mart architecture for better performance',
+                'Evaluate columnar storage for analytical workloads',
+                'Implement data compression strategies'
+            ]
+
+        return jsonify({
+            'success': True,
+            'recommendations': recommendations,
+            'complexity_score': complexity_score,
+            'complexity_level': 'high' if complexity_score > 100 else 'medium' if complexity_score > 50 else 'low'
+        })
+
+    except Exception as e:
+        app.logger.error(f"Error generating recommendations: {str(e)}")
+        return jsonify({'error': f'Error generating recommendations: {str(e)}'}), 500
+
+
+@app.route('/api/dw-metadata', methods=['GET', 'OPTIONS'])
+def get_dw_metadata():
+    """Get metadata about dimensional modeling capabilities"""
+    if request.method == 'OPTIONS':
+        return '', 200
+
+    try:
+        metadata = {
+            'supported_dialects': [dialect.value for dialect in DatabaseDialect],
+            'modeling_features': {
+                'star_schema': True,
+                'snowflake_schema': False,  # Future enhancement
+                'slowly_changing_dimensions': True,
+                'fact_table_types': ['transaction', 'snapshot', 'accumulating'],
+                'dimension_types': ['conformed', 'degenerate', 'junk', 'role_playing']
+            },
+            'optimization_features': {
+                'partitioning': True,
+                'indexing': True,
+                'compression': False,  # Future enhancement
+                'materialized_views': True,
+                'aggregate_tables': False  # Future enhancement
+            },
+            'etl_features': {
+                'scd_type_1': True,
+                'scd_type_2': True,
+                'scd_type_3': False,  # Future enhancement
+                'incremental_loading': True,
+                'data_validation': True
+            },
+            'analytics_features': {
+                'olap_cubes': False,  # Future enhancement
+                'calculated_measures': False,  # Future enhancement
+                'drill_down_drill_up': False,  # Future enhancement
+                'time_intelligence': True
+            }
+        }
+
+        return jsonify({
+            'success': True,
+            'metadata': metadata,
+            'version': '1.0.0',
+            'last_updated': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        app.logger.error(f"Error getting metadata: {str(e)}")
+        return jsonify({'error': f'Error getting metadata: {str(e)}'}), 500
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5001, debug=True)

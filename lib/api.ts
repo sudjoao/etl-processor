@@ -62,10 +62,48 @@ export class ApiService {
     }
 
     const headerRow = csvData.headers.map(escapeField).join(delimiter)
-    const dataRows = csvData.rows.map(row => 
+    const dataRows = csvData.rows.map(row =>
       row.map(escapeField).join(delimiter)
     )
 
     return [headerRow, ...dataRows].join('\n')
+  }
+
+  // Data Warehouse API methods
+  static async analyzeSql(sql: string): Promise<any> {
+    return this.makeRequest('/api/analyze-sql', {
+      method: 'POST',
+      body: JSON.stringify({ sql }),
+    })
+  }
+
+  static async generateDwModel(options: {
+    sql: string
+    model_name?: string
+    dialect?: string
+    include_indexes?: boolean
+    include_partitioning?: boolean
+  }): Promise<any> {
+    return this.makeRequest('/api/generate-dw-model', {
+      method: 'POST',
+      body: JSON.stringify({
+        sql: options.sql,
+        model_name: options.model_name || 'DataWarehouse',
+        dialect: options.dialect || 'mysql',
+        include_indexes: options.include_indexes ?? true,
+        include_partitioning: options.include_partitioning ?? false,
+      }),
+    })
+  }
+
+  static async getDwRecommendations(starSchema: any): Promise<any> {
+    return this.makeRequest('/api/dw-recommendations', {
+      method: 'POST',
+      body: JSON.stringify({ star_schema: starSchema }),
+    })
+  }
+
+  static async getDwMetadata(): Promise<any> {
+    return this.makeRequest('/api/dw-metadata')
   }
 }
