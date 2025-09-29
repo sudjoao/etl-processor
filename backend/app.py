@@ -10,9 +10,11 @@ from datetime import datetime
 app = Flask(__name__)
 
 # Configure CORS with specific settings
-CORS(app, origins=["http://localhost:3000", "http://frontend:3000"],
+CORS(app, 
+     origins=["http://localhost:3000", "http://frontend:3000"],
      methods=["GET", "POST", "OPTIONS"],
-     allow_headers=["Content-Type", "Authorization"])
+     allow_headers=["Content-Type", "Authorization"],
+     supports_credentials=True)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -26,6 +28,14 @@ def log_request_info():
 @app.after_request
 def log_response_info(response):
     logger.info(f"Response: {response.status_code}")
+    return response
+
+@app.after_request
+def after_request(response):
+    # Additional CORS headers for preflight requests
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
     return response
 
 class CSVToSQLTransformer:
@@ -243,14 +253,19 @@ class CSVToSQLTransformer:
 # Initialize transformer
 transformer = CSVToSQLTransformer()
 
-@app.route('/api/health', methods=['GET'])
+@app.route('/api/health', methods=['GET', 'OPTIONS'])
 def health_check():
     """Health check endpoint"""
+    if request.method == 'OPTIONS':
+        return '', 200
     return jsonify({"status": "healthy", "service": "csv-to-sql-api"})
 
-@app.route('/api/transform', methods=['POST'])
+@app.route('/api/transform', methods=['POST', 'OPTIONS'])
 def transform_csv_to_sql():
     """Transform CSV to SQL endpoint"""
+    if request.method == 'OPTIONS':
+        return '', 200
+    
     try:
         # Get request data
         data = request.get_json()
