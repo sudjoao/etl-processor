@@ -11,6 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Download, FileText, CheckCircle, Loader2, Database } from "lucide-react"
 import type { CSVData, FieldConfig, DelimiterType } from "@/app/page"
+import { ApiService } from "@/lib/api"
 
 interface ExportControlsProps {
   csvData: CSVData
@@ -26,6 +27,7 @@ export function ExportControls({ csvData, fields, delimiter }: ExportControlsPro
   const [outputDelimiter, setOutputDelimiter] = useState<DelimiterType>(delimiter)
   const [isExporting, setIsExporting] = useState(false)
   const [exportComplete, setExportComplete] = useState(false)
+  const [exportError, setExportError] = useState<string | null>(null)
   const [sqlDatabaseType, setSqlDatabaseType] = useState<SQLDatabaseType>("ansi")
   const [createTable, setCreateTable] = useState(true)
   const [tableName, setTableName] = useState("dados_importados")
@@ -228,20 +230,36 @@ export function ExportControls({ csvData, fields, delimiter }: ExportControlsPro
   const handleExport = async () => {
     setIsExporting(true)
     setExportComplete(false)
+    setExportError(null)
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-
-      const formattedData = formatData()
       let content: string
       let filename: string
       let mimeType: string
 
       if (exportFormat === "sql") {
-        content = generateSQL(formattedData)
+        // Use API to generate SQL
+        const csvContent = ApiService.csvDataToString(csvData, delimiter)
+
+        const response = await ApiService.transformCsvToSql({
+          csvContent,
+          fields,
+          tableName,
+          delimiter,
+          databaseType: sqlDatabaseType,
+          includeCreateTable: createTable
+        })
+
+        if (!response.success) {
+          throw new Error(response.error || "Erro ao gerar SQL")
+        }
+
+        content = response.sql
         filename = `${tableName}.sql`
         mimeType = "text/sql;charset=utf-8;"
       } else {
+        // Generate CSV/TSV/TXT locally
+        const formattedData = formatData()
         content = generateCSV(formattedData, outputDelimiter)
         filename = `dados_processados.${exportFormat}`
         mimeType = "text/csv;charset=utf-8;"
@@ -261,6 +279,8 @@ export function ExportControls({ csvData, fields, delimiter }: ExportControlsPro
       setExportComplete(true)
     } catch (error) {
       console.error("Erro ao exportar:", error)
+      const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido'
+      setExportError(errorMessage)
     } finally {
       setIsExporting(false)
     }
@@ -466,6 +486,14 @@ export function ExportControls({ csvData, fields, delimiter }: ExportControlsPro
             <CheckCircle className="h-4 w-4" />
             <AlertDescription>
               <strong>Sucesso!</strong> Seu arquivo foi processado e baixado com sucesso.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {exportError && (
+          <Alert variant="destructive" className="max-w-md">
+            <AlertDescription>
+              <strong>Erro!</strong> {exportError}
             </AlertDescription>
           </Alert>
         )}
