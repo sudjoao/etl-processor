@@ -9,6 +9,7 @@ from datetime import datetime
 from sql_analyzer import SQLAnalyzer
 from dimensional_modeling import DimensionalModelingEngine
 from star_schema_generator import StarSchemaGenerator, DatabaseDialect
+from ai_dimension_classifier import AIDimensionClassifier
 
 app = Flask(__name__)
 
@@ -355,10 +356,13 @@ def generate_dw_model():
     if request.method == 'OPTIONS':
         return '', 200
 
+    app.logger.info("🚀 [DW MODEL] Starting DW model generation...")
     try:
         data = request.get_json()
+        app.logger.info(f"🚀 [DW MODEL] Received request data keys: {list(data.keys()) if data else 'None'}")
 
         if not data or 'sql' not in data:
+            app.logger.error("❌ [DW MODEL] SQL content is required but not provided")
             return jsonify({'error': 'SQL content is required'}), 400
 
         sql_content = data['sql']
@@ -367,11 +371,17 @@ def generate_dw_model():
         include_indexes = data.get('include_indexes', True)
         include_partitioning = data.get('include_partitioning', False)
 
+        app.logger.info(f"🚀 [DW MODEL] Parameters - Model: {model_name}, Dialect: {dialect}")
+        app.logger.info(f"🚀 [DW MODEL] SQL content length: {len(sql_content)} characters")
+
         # Initialize dimensional modeling engine
+        app.logger.info("🚀 [DW MODEL] Initializing dimensional modeling engine...")
         modeling_engine = DimensionalModelingEngine()
 
         # Create dimensional model
+        app.logger.info("🚀 [DW MODEL] Creating dimensional model...")
         model_result = modeling_engine.create_dimensional_model(sql_content, model_name)
+        app.logger.info(f"🚀 [DW MODEL] Model creation result keys: {list(model_result.keys())}")
 
         if 'error' in model_result:
             return jsonify(model_result), 400
@@ -515,6 +525,58 @@ def get_dw_metadata():
     except Exception as e:
         app.logger.error(f"Error getting metadata: {str(e)}")
         return jsonify({'error': f'Error getting metadata: {str(e)}'}), 500
+
+
+@app.route('/api/test-ai-classification', methods=['POST'])
+def test_ai_classification():
+    """Test AI dimension classification"""
+    try:
+        data = request.get_json()
+
+        if not data or 'sql' not in data:
+            return jsonify({'error': 'SQL content is required'}), 400
+
+        sql_content = data['sql']
+
+        # Parse SQL to get table structure
+        sql_analyzer = SQLAnalyzer()
+        analysis = sql_analyzer.parse_sql(sql_content)
+
+        if not analysis.get('tables'):
+            return jsonify({'error': 'No tables found in SQL'}), 400
+
+        # Get first table for testing
+        table = analysis['tables'][0]
+
+        # Test AI classification
+        ai_classifier = AIDimensionClassifier()
+        classifications = ai_classifier.classify_table_dimensions(table['name'], table['columns'])
+
+        # Format response
+        result = {
+            'table_name': table['name'],
+            'ai_enabled': ai_classifier.enabled,
+            'model_used': ai_classifier.model if ai_classifier.enabled else 'fallback',
+            'classifications': []
+        }
+
+        for classification in classifications:
+            result['classifications'].append({
+                'column_name': classification.column_name,
+                'dimension_type': classification.dimension_type,
+                'dimensional_role': classification.dimensional_role,
+                'confidence': classification.confidence,
+                'reasoning': classification.reasoning
+            })
+
+        return jsonify({
+            'success': True,
+            'result': result
+        })
+
+    except Exception as e:
+        app.logger.error(f"Error testing AI classification: {str(e)}")
+        return jsonify({'error': f'Error testing AI classification: {str(e)}'}), 500
 
 
 if __name__ == '__main__':

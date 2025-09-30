@@ -1,0 +1,263 @@
+{
+  "ddl_statements": [
+    "-- Product dimension\nCREATE TABLE dim_product (\n    product_sk INT IDENTITY(1,1) PRIMARY KEY,\n    title VARCHAR(50) NOT NULL,\n    genre VARCHAR(255),\n    rating VARCHAR(255),\n    duration VARCHAR(255),\n    language VARCHAR(255),\n    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\n    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP\n);\n\nCREATE INDEX idx_dim_product_title ON dim_product(title);\n\n",
+    "-- Person dimension\nCREATE TABLE dim_person (\n    person_sk INT IDENTITY(1,1) PRIMARY KEY,\n    director VARCHAR(50) NOT NULL,\n    actors VARCHAR(255),\n    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\n    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP\n);\n\nCREATE INDEX idx_dim_person_director ON dim_person(director);\n\n",
+    "-- Location dimension\nCREATE TABLE dim_location (\n    location_sk INT IDENTITY(1,1) PRIMARY KEY,\n    country VARCHAR(50) NOT NULL,\n    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\n    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP\n);\n\nCREATE INDEX idx_dim_location_country ON dim_location(country);\n\n",
+    "-- Standard date dimension table\nCREATE TABLE dim_date (\n    date_sk INT IDENTITY(1,1) PRIMARY KEY,\n    date_key VARCHAR(50) NOT NULL,\n    full_date VARCHAR(255),\n    day_of_week VARCHAR(255),\n    day_name VARCHAR(255),\n    day_of_month VARCHAR(255),\n    day_of_year VARCHAR(255),\n    week_of_year VARCHAR(255),\n    month_number VARCHAR(255),\n    month_name VARCHAR(255),\n    quarter VARCHAR(255),\n    year VARCHAR(255),\n    is_weekend VARCHAR(255),\n    is_holiday VARCHAR(255),\n    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\n    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP\n);\n\nCREATE INDEX idx_dim_date_date_key ON dim_date(date_key);\n\n",
+    "-- Fact table derived from movies\nCREATE TABLE fact_movies (\n    product_sk INT NOT NULL,\n    person_sk INT NOT NULL,\n    location_sk INT NOT NULL,\n    date_sk INT NOT NULL,\n    budget DECIMAL(18,2),\n    box_office DECIMAL(18,2),\n    imdb_score DECIMAL(18,2),\n    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\n    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\n    PRIMARY KEY (product_sk, person_sk, location_sk, date_sk)\n);\n\nALTER TABLE fact_movies ADD CONSTRAINT fk_fact_movies_dim_product FOREIGN KEY (product_sk) REFERENCES dim_product(product_sk);\nALTER TABLE fact_movies ADD CONSTRAINT fk_fact_movies_dim_person FOREIGN KEY (person_sk) REFERENCES dim_person(person_sk);\nALTER TABLE fact_movies ADD CONSTRAINT fk_fact_movies_dim_location FOREIGN KEY (location_sk) REFERENCES dim_location(location_sk);\nALTER TABLE fact_movies ADD CONSTRAINT fk_fact_movies_dim_date FOREIGN KEY (date_sk) REFERENCES dim_date(date_sk);\n\n"
+  ],
+  "original_analysis": {
+    "dimensional_analysis": {
+      "attributes": [],
+      "dimension_candidates": [],
+      "fact_candidates": [],
+      "measures": [],
+      "time_dimensions": []
+    },
+    "recommendations": [
+      "Consider denormalizing this single table into fact and dimension tables",
+      "No clear fact table candidates found. Consider adding measurable numeric columns"
+    ],
+    "relationships": [],
+    "tables": [
+      {
+        "columns": [
+          {
+            "cardinality_estimate": "MEDIUM",
+            "column_type": "text",
+            "data_type": "VARCHAR(255)",
+            "dimensional_role": "dimension_attribute",
+            "is_nullable": true,
+            "is_primary_key": false,
+            "name": "title"
+          },
+          {
+            "cardinality_estimate": "MEDIUM",
+            "column_type": "text",
+            "data_type": "VARCHAR(100)",
+            "dimensional_role": "dimension_attribute",
+            "is_nullable": true,
+            "is_primary_key": false,
+            "name": "genre"
+          },
+          {
+            "cardinality_estimate": "MEDIUM",
+            "column_type": "text",
+            "data_type": "VARCHAR(10)",
+            "dimensional_role": "dimension_attribute",
+            "is_nullable": true,
+            "is_primary_key": false,
+            "name": "rating"
+          },
+          {
+            "cardinality_estimate": "HIGH",
+            "column_type": "numeric",
+            "data_type": "INT",
+            "dimensional_role": "unknown",
+            "is_nullable": true,
+            "is_primary_key": false,
+            "name": "year"
+          },
+          {
+            "cardinality_estimate": "MEDIUM",
+            "column_type": "text",
+            "data_type": "VARCHAR(255)",
+            "dimensional_role": "dimension_attribute",
+            "is_nullable": true,
+            "is_primary_key": false,
+            "name": "director"
+          },
+          {
+            "cardinality_estimate": "MEDIUM",
+            "column_type": "text",
+            "data_type": "TEXT",
+            "dimensional_role": "dimension_attribute",
+            "is_nullable": true,
+            "is_primary_key": false,
+            "name": "actors"
+          },
+          {
+            "cardinality_estimate": "HIGH",
+            "column_type": "numeric",
+            "data_type": "BIGINT",
+            "dimensional_role": "unknown",
+            "is_nullable": true,
+            "is_primary_key": false,
+            "name": "budget"
+          },
+          {
+            "cardinality_estimate": "HIGH",
+            "column_type": "numeric",
+            "data_type": "BIGINT",
+            "dimensional_role": "unknown",
+            "is_nullable": true,
+            "is_primary_key": false,
+            "name": "box_office"
+          },
+          {
+            "cardinality_estimate": "HIGH",
+            "column_type": "numeric",
+            "data_type": "INT",
+            "dimensional_role": "unknown",
+            "is_nullable": true,
+            "is_primary_key": false,
+            "name": "duration"
+          },
+          {
+            "cardinality_estimate": "MEDIUM",
+            "column_type": "text",
+            "data_type": "VARCHAR(100)",
+            "dimensional_role": "fact_measure",
+            "is_nullable": true,
+            "is_primary_key": false,
+            "name": "country"
+          },
+          {
+            "cardinality_estimate": "MEDIUM",
+            "column_type": "text",
+            "data_type": "VARCHAR(100)",
+            "dimensional_role": "dimension_attribute",
+            "is_nullable": true,
+            "is_primary_key": false,
+            "name": "language"
+          },
+          {
+            "cardinality_estimate": "HIGH",
+            "column_type": "numeric",
+            "data_type": "DECIMAL(3",
+            "dimensional_role": "unknown",
+            "is_nullable": true,
+            "is_primary_key": false,
+            "name": "imdb_score"
+          }
+        ],
+        "foreign_keys": {},
+        "name": "movies",
+        "primary_keys": [],
+        "table_type": "BASE_TABLE"
+      }
+    ]
+  },
+  "recommendations": [
+    "Consider implementing Slowly Changing Dimensions (SCD) for historical tracking"
+  ],
+  "star_schema": {
+    "dimension_tables": [
+      {
+        "attributes": [
+          "title",
+          "genre",
+          "rating",
+          "duration",
+          "language"
+        ],
+        "description": "Product dimension",
+        "name": "dim_product",
+        "natural_key": "title",
+        "scd_type": 1,
+        "source_table": "movies",
+        "surrogate_key": "product_sk"
+      },
+      {
+        "attributes": [
+          "director",
+          "actors"
+        ],
+        "description": "Person dimension",
+        "name": "dim_person",
+        "natural_key": "director",
+        "scd_type": 1,
+        "source_table": "movies",
+        "surrogate_key": "person_sk"
+      },
+      {
+        "attributes": [
+          "country"
+        ],
+        "description": "Location dimension",
+        "name": "dim_location",
+        "natural_key": "country",
+        "scd_type": 1,
+        "source_table": "movies",
+        "surrogate_key": "location_sk"
+      },
+      {
+        "attributes": [
+          "date_key",
+          "full_date",
+          "day_of_week",
+          "day_name",
+          "day_of_month",
+          "day_of_year",
+          "week_of_year",
+          "month_number",
+          "month_name",
+          "quarter",
+          "year",
+          "is_weekend",
+          "is_holiday"
+        ],
+        "description": "Standard date dimension table",
+        "name": "dim_date",
+        "natural_key": "date_key",
+        "scd_type": 1,
+        "source_table": "generated",
+        "surrogate_key": "date_sk"
+      }
+    ],
+    "fact_table": {
+      "description": "Fact table derived from movies",
+      "dimension_keys": [
+        "product_sk",
+        "person_sk",
+        "location_sk",
+        "date_sk"
+      ],
+      "grain": "One row per movies record",
+      "measures": [
+        "budget",
+        "box_office",
+        "imdb_score"
+      ],
+      "name": "fact_movies",
+      "source_table": "movies"
+    },
+    "metadata": {
+      "created_at": "2025-09-30T12:48:16.619773",
+      "modeling_approach": "denormalization",
+      "source_tables": 1
+    },
+    "name": "MoviesDataWarehouse",
+    "relationships": [
+      {
+        "from_column": "product_sk",
+        "from_table": "fact_movies",
+        "relationship_type": "many_to_one",
+        "to_column": "product_sk",
+        "to_table": "dim_product"
+      },
+      {
+        "from_column": "person_sk",
+        "from_table": "fact_movies",
+        "relationship_type": "many_to_one",
+        "to_column": "person_sk",
+        "to_table": "dim_person"
+      },
+      {
+        "from_column": "location_sk",
+        "from_table": "fact_movies",
+        "relationship_type": "many_to_one",
+        "to_column": "location_sk",
+        "to_table": "dim_location"
+      },
+      {
+        "from_column": "date_sk",
+        "from_table": "fact_movies",
+        "relationship_type": "many_to_one",
+        "to_column": "date_sk",
+        "to_table": "dim_date"
+      }
+    ]
+  },
+  "success": true
+}

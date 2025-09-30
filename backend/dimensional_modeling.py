@@ -4,10 +4,15 @@ Implements algorithms to automatically identify and create star schema models
 """
 
 import re
+import logging
 from typing import Dict, List, Tuple, Optional, Any
 from dataclasses import dataclass, field
 from datetime import datetime
 from sql_analyzer import SQLAnalyzer, TableInfo, ColumnInfo, DimensionalRole, ColumnType
+from ai_dimension_classifier import AIDimensionClassifier
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -48,24 +53,25 @@ class DimensionalModelingEngine:
     
     def __init__(self):
         self.sql_analyzer = SQLAnalyzer()
+        self.ai_classifier = AIDimensionClassifier()
         self.star_schemas: List[StarSchema] = []
-        
-        # Common dimension patterns
+
+        # Common dimension patterns (fallback when AI is not available)
         self.time_dimension_patterns = [
             r'.*data.*', r'.*date.*', r'.*time.*', r'.*hora.*',
             r'.*created.*', r'.*updated.*', r'.*modified.*'
         ]
-        
+
         self.customer_dimension_patterns = [
             r'.*cliente.*', r'.*customer.*', r'.*person.*', r'.*pessoa.*',
             r'.*user.*', r'.*usuario.*'
         ]
-        
+
         self.product_dimension_patterns = [
             r'.*produto.*', r'.*product.*', r'.*item.*', r'.*servico.*',
             r'.*service.*', r'.*material.*'
         ]
-        
+
         self.location_dimension_patterns = [
             r'.*local.*', r'.*location.*', r'.*endereco.*', r'.*address.*',
             r'.*cidade.*', r'.*city.*', r'.*estado.*', r'.*state.*'
@@ -73,31 +79,58 @@ class DimensionalModelingEngine:
 
     def create_dimensional_model(self, sql_content: str, model_name: str = "DataWarehouse") -> Dict[str, Any]:
         """Create a dimensional model from SQL content"""
+        logger.info(f"🏗️ [DIM MODEL] Starting dimensional model creation for: {model_name}")
+        logger.info(f"🏗️ [DIM MODEL] SQL content length: {len(sql_content)} characters")
+
         try:
             # Analyze SQL structure
+            logger.info("🔍 [DIM MODEL] Analyzing SQL structure...")
             analysis = self.sql_analyzer.parse_sql(sql_content)
-            
+            logger.info(f"🔍 [DIM MODEL] SQL analysis completed, keys: {list(analysis.keys())}")
+
             if "error" in analysis:
+                logger.error(f"❌ [DIM MODEL] SQL analysis error: {analysis['error']}")
                 return {"error": analysis["error"]}
-            
+
+            # Log analysis details
+            tables = analysis.get("tables", [])
+            logger.info(f"🔍 [DIM MODEL] Found {len(tables)} tables in analysis")
+            for i, table in enumerate(tables):
+                logger.info(f"🔍 [DIM MODEL] Table {i+1}: {table.get('name', 'unknown')} with {len(table.get('columns', []))} columns")
+
             # Generate star schema
+            logger.info("⭐ [DIM MODEL] Generating star schema...")
             star_schema = self._generate_star_schema(analysis, model_name)
-            
+
             if not star_schema:
+                logger.error("❌ [DIM MODEL] Could not generate a valid star schema")
                 return {"error": "Could not generate a valid star schema from the provided SQL"}
-            
+
+            logger.info(f"✅ [DIM MODEL] Star schema generated successfully")
+            logger.info(f"⭐ [DIM MODEL] Fact table: {star_schema.fact_table.name}")
+            logger.info(f"⭐ [DIM MODEL] Dimension tables: {len(star_schema.dimension_tables)}")
+
             # Generate DDL for the star schema
+            logger.info("📝 [DIM MODEL] Generating DDL statements...")
             ddl_statements = self._generate_star_schema_ddl(star_schema)
-            
-            return {
+            logger.info(f"📝 [DIM MODEL] Generated {len(ddl_statements)} DDL statements")
+
+            result = {
                 "success": True,
                 "star_schema": self._star_schema_to_dict(star_schema),
                 "ddl_statements": ddl_statements,
                 "original_analysis": analysis,
                 "recommendations": self._generate_modeling_recommendations(star_schema, analysis)
             }
-            
+
+            logger.info("✅ [DIM MODEL] Dimensional model creation completed successfully")
+            return result
+
         except Exception as e:
+            logger.error(f"❌ [DIM MODEL] Error creating dimensional model: {str(e)}")
+            import traceback
+            logger.error(f"🔍 [DIM MODEL] Full error traceback:")
+            logger.error(traceback.format_exc())
             return {"error": f"Error creating dimensional model: {str(e)}"}
 
     def _generate_star_schema(self, analysis: Dict[str, Any], model_name: str) -> Optional[StarSchema]:
@@ -152,33 +185,51 @@ class DimensionalModelingEngine:
         )
 
     def _denormalize_single_table(self, table_data: Dict[str, Any], model_name: str) -> StarSchema:
-        """Create star schema by denormalizing a single table"""
+        """Create star schema by denormalizing a single table using AI classification"""
         table_name = table_data["name"]
         columns = table_data["columns"]
 
-        # Enhanced logic for single table analysis
+        logger.info(f"🔄 [DENORMALIZE] Starting denormalization for table: {table_name}")
+        logger.info(f"🔄 [DENORMALIZE] Table has {len(columns)} columns")
+
+        # Log column details
+        for i, col in enumerate(columns):
+            logger.info(f"🔄 [DENORMALIZE] Column {i+1}: {col.get('name', 'unknown')} ({col.get('data_type', 'unknown')})")
+
+        # Use AI to classify dimensions
+        logger.info("🤖 [DENORMALIZE] Calling AI classifier...")
+        ai_classifications = self.ai_classifier.classify_table_dimensions(table_name, columns)
+        logger.info(f"🤖 [DENORMALIZE] AI classifier returned {len(ai_classifications)} classifications")
+
+        # Process AI classifications
         measures = []
         dimension_attributes = {}
         time_columns = []
 
-        # Smart classification for access control data
-        for col in columns:
-            col_name = col["name"].lower()
+        logger.info("🔄 [DENORMALIZE] Processing AI classifications...")
+        for i, classification in enumerate(ai_classifications):
+            col_name = classification.column_name
+            dim_role = classification.dimensional_role
+            dim_type = classification.dimension_type
+            confidence = classification.confidence
 
-            # Time dimensions
-            if any(time_word in col_name for time_word in ['data', 'date', 'horario', 'time', 'entrada', 'saida']):
-                time_columns.append(col["name"])
+            logger.info(f"🔄 [DENORMALIZE] Classification {i+1}: {col_name} -> {dim_type}/{dim_role} (confidence: {confidence})")
 
-            # Fact measures (even if stored as text, they represent measurable events)
-            elif col.get("dimensional_role") == "fact_measure" or any(measure_word in col_name for measure_word in ['quantidade', 'valor', 'total', 'count']):
-                measures.append(col["name"])
-
-            # Dimension attributes
-            else:
-                dim_type = self._classify_dimension_type(col["name"])
+            if dim_role == "fact_measure":
+                measures.append(col_name)
+                logger.info(f"📊 [DENORMALIZE] Added measure: {col_name}")
+            elif dim_role == "time_dimension":
+                time_columns.append(col_name)
+                logger.info(f"⏰ [DENORMALIZE] Added time column: {col_name}")
+            elif dim_role in ["dimension_attribute", "dimension_key"]:
                 if dim_type not in dimension_attributes:
                     dimension_attributes[dim_type] = []
-                dimension_attributes[dim_type].append(col["name"])
+                dimension_attributes[dim_type].append(col_name)
+                logger.info(f"🏷️ [DENORMALIZE] Added dimension attribute: {col_name} to {dim_type}")
+
+        logger.info(f"📊 [DENORMALIZE] Summary - Measures: {len(measures)}, Time columns: {len(time_columns)}, Dimension types: {len(dimension_attributes)}")
+        logger.info(f"📊 [DENORMALIZE] Measures: {measures}")
+        logger.info(f"📊 [DENORMALIZE] Dimension attributes: {dimension_attributes}")
 
         # If no explicit measures found, create implicit measures for event counting
         if not measures:

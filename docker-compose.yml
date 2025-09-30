@@ -10,6 +10,11 @@ services:
     environment:
       - FLASK_ENV=production
       - FLASK_APP=app.py
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - AI_MODEL=${AI_MODEL}
+      - AI_CLASSIFICATION_ENABLED=${AI_CLASSIFICATION_ENABLED}
+    env_file:
+      - .env
     networks:
       - etl-network
     restart: unless-stopped

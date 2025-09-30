@@ -1,0 +1,58 @@
+{
+  "description": "Exemplo de teste da classificação IA de dimensões",
+  "endpoint": "POST /api/test-ai-classification",
+  "request": {
+    "sql": "CREATE TABLE vendas (\n  id_venda INT PRIMARY KEY,\n  data_venda DATE,\n  cliente_nome VARCHAR(255),\n  cliente_email VARCHAR(255),\n  produto_nome VARCHAR(255),\n  categoria VARCHAR(100),\n  quantidade INT,\n  preco_unitario DECIMAL(10,2),\n  valor_total DECIMAL(10,2),\n  vendedor VARCHAR(255),\n  regiao VARCHAR(100)\n);"
+  },
+  "expected_response": {
+    "success": true,
+    "result": {
+      "table_name": "vendas",
+      "ai_enabled": true,
+      "model_used": "anthropic/claude-3.5-sonnet",
+      "classifications": [
+        {
+          "column_name": "id_venda",
+          "dimension_type": "transaction",
+          "dimensional_role": "dimension_key",
+          "confidence": 0.95,
+          "reasoning": "Primary key identifier for transaction fact table"
+        },
+        {
+          "column_name": "data_venda",
+          "dimension_type": "time",
+          "dimensional_role": "time_dimension",
+          "confidence": 0.98,
+          "reasoning": "Date field clearly indicates time dimension"
+        },
+        {
+          "column_name": "cliente_nome",
+          "dimension_type": "customer",
+          "dimensional_role": "dimension_attribute",
+          "confidence": 0.92,
+          "reasoning": "Customer name is a descriptive attribute for customer dimension"
+        },
+        {
+          "column_name": "quantidade",
+          "dimension_type": "transaction",
+          "dimensional_role": "fact_measure",
+          "confidence": 0.90,
+          "reasoning": "Numeric quantity that can be aggregated as a measure"
+        },
+        {
+          "column_name": "valor_total",
+          "dimension_type": "transaction",
+          "dimensional_role": "fact_measure",
+          "confidence": 0.95,
+          "reasoning": "Monetary value that represents the main business measure"
+        }
+      ]
+    }
+  },
+  "notes": [
+    "Para usar a classificação IA, configure OPENROUTER_API_KEY no arquivo .env",
+    "Se a IA não estiver disponível, o sistema usa classificação baseada em regras",
+    "A IA fornece classificações mais precisas e contextuais",
+    "Cada classificação inclui nível de confiança e raciocínio"
+  ]
+}

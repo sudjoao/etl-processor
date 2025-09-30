@@ -30,6 +30,7 @@ O projeto foi reestruturado para uma arquitetura moderna de microserviços:
 - 📋 Geração de DDL para múltiplos SGBDs
 - 🔍 Visualização interativa do modelo dimensional
 - 🛠️ **Suporte aprimorado para dados de CSV**: Funciona com tabelas únicas geradas a partir de CSV
+- 🤖 **Classificação IA**: Integração com OpenRouter para classificação inteligente de dimensões
 
 ## 🛠️ Tecnologias Utilizadas
 
@@ -127,7 +128,15 @@ cd backend
 pip install -r requirements.txt
 ```
 
-3. **Executar o servidor Flask**
+3. **Configurar classificação IA (opcional)**
+```bash
+# Editar .env e adicionar sua chave do OpenRouter
+OPENROUTER_API_KEY=sk-or-v1-sua-chave-aqui
+AI_MODEL=anthropic/claude-3.5-sonnet
+AI_CLASSIFICATION_ENABLED=true
+```
+
+4. **Executar o servidor Flask**
 ```bash
 python app.py
 ```
@@ -253,6 +262,43 @@ GET /api/dw-metadata
 - PostgreSQL
 - SQLite
 - SQL Server
+
+### Modelos de IA Suportados (OpenRouter)
+- `anthropic/claude-3.5-sonnet` (recomendado)
+- `anthropic/claude-3-haiku`
+- `openai/gpt-4o`
+- `openai/gpt-3.5-turbo`
+- `meta-llama/llama-3.1-8b-instruct`
+
+## 🤖 Classificação IA de Dimensões
+
+O sistema inclui classificação inteligente de dimensões usando IA via OpenRouter:
+
+### Configuração
+1. Obtenha uma chave API em [OpenRouter](https://openrouter.ai/)
+2. Configure no arquivo `.env`:
+```bash
+OPENROUTER_API_KEY=sk-or-v1-sua-chave-aqui
+AI_MODEL=anthropic/claude-3.5-sonnet
+AI_CLASSIFICATION_ENABLED=true
+```
+
+### Funcionalidades
+- **Classificação Automática**: IA analisa colunas e identifica padrões dimensionais
+- **Fallback Inteligente**: Se a IA falhar, usa classificação baseada em regras
+- **Múltiplos Modelos**: Suporte a diferentes modelos de IA
+- **Confiança**: Cada classificação inclui nível de confiança
+- **Raciocínio**: IA explica suas decisões de classificação
+
+### Endpoint de Teste
+```http
+POST /api/test-ai-classification
+Content-Type: application/json
+
+{
+  "sql": "CREATE TABLE dados (nome VARCHAR(255), cpf VARCHAR(255));"
+}
+```
 
 ## 🐛 Troubleshooting
 
