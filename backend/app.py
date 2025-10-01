@@ -4,7 +4,7 @@ import csv
 import io
 import re
 import logging
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 from datetime import datetime
 from sql_analyzer import SQLAnalyzer
 from dimensional_modeling import DimensionalModelingEngine
@@ -395,17 +395,42 @@ def generate_dw_model():
         schema_generator = StarSchemaGenerator(db_dialect)
         star_schema = modeling_engine.star_schemas[0] if modeling_engine.star_schemas else None
 
+        app.logger.info(f"🚀 [DW MODEL] Star schemas available: {len(modeling_engine.star_schemas)}")
+        app.logger.info(f"🚀 [DW MODEL] Star schema object: {star_schema is not None}")
+
         if star_schema:
+            app.logger.info("🚀 [DW MODEL] Generating complete schema with DML...")
             complete_schema = schema_generator.generate_complete_schema(
                 star_schema,
                 include_indexes=include_indexes,
-                include_partitioning=include_partitioning
+                include_partitioning=include_partitioning,
+                include_sample_data=False,
+                sample_records=10,
+                original_sql=sql_content
             )
+            app.logger.info(f"🚀 [DW MODEL] Complete schema keys: {list(complete_schema.keys())}")
             model_result['complete_schema'] = complete_schema
+
+            # Override DDL statements with the ones from StarSchemaGenerator (more complete)
+            if 'ddl_statements' in complete_schema:
+                model_result['ddl_statements'] = complete_schema['ddl_statements']
+                app.logger.info(f"🚀 [DW MODEL] Updated DDL statements count: {len(complete_schema['ddl_statements'])}")
 
             # Generate ETL templates
             etl_templates = schema_generator.generate_etl_templates(star_schema)
             model_result['etl_templates'] = etl_templates
+
+            # Extract DML statements for easier access
+            if 'dml_statements' in complete_schema:
+                dml_statements = complete_schema['dml_statements']
+                if isinstance(dml_statements, dict):
+                    app.logger.info(f"🚀 [DW MODEL] DML statements found: {list(dml_statements.keys())}")
+                    model_result['dml_statements'] = dml_statements
+                else:
+                    app.logger.info(f"🚀 [DW MODEL] DML statements type: {type(dml_statements)}, content: {dml_statements}")
+                    model_result['dml_statements'] = {}
+            else:
+                app.logger.warning("🚀 [DW MODEL] No DML statements found in complete_schema")
 
         return jsonify(model_result)
 

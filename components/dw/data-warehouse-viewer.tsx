@@ -89,13 +89,62 @@ export function DataWarehouseViewer({ sqlContent, onClose }: DataWarehouseViewer
 
   const downloadDdl = () => {
     if (!dwModel?.ddl_statements) return
-    
+
     const ddlContent = dwModel.ddl_statements.join('\n\n')
     const blob = new Blob([ddlContent], { type: 'text/sql' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
     a.download = `${dwModel.star_schema?.name || 'datawarehouse'}_schema.sql`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
+  const downloadDml = () => {
+    if (!dwModel?.dml_statements) return
+
+    // Convert DML statements object to string
+    const dmlContent = Object.values(dwModel.dml_statements).join('\n\n')
+    const blob = new Blob([dmlContent], { type: 'text/sql' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${dwModel.star_schema?.name || 'datawarehouse'}_sample_data.sql`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
+  const downloadComplete = () => {
+    if (!dwModel?.ddl_statements && !dwModel?.dml_statements) return
+
+    let content = ''
+
+    // Add DDL first
+    if (dwModel.ddl_statements) {
+      content += '-- ========================================\n'
+      content += '-- DDL STATEMENTS (CREATE TABLES)\n'
+      content += '-- ========================================\n\n'
+      content += dwModel.ddl_statements.join('\n\n')
+      content += '\n\n'
+    }
+
+    // Add DML after
+    if (dwModel.dml_statements) {
+      content += '-- ========================================\n'
+      content += '-- DML STATEMENTS (SAMPLE DATA)\n'
+      content += '-- ========================================\n\n'
+      content += Object.values(dwModel.dml_statements).join('\n\n')
+    }
+
+    const blob = new Blob([content], { type: 'text/sql' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${dwModel.star_schema?.name || 'datawarehouse'}_complete.sql`
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
@@ -160,6 +209,18 @@ export function DataWarehouseViewer({ sqlContent, onClose }: DataWarehouseViewer
             <Download className="h-4 w-4 mr-2" />
             Download DDL
           </Button>
+          {dwModel?.dml_statements && (
+            <Button onClick={downloadDml} variant="outline" size="sm">
+              <Download className="h-4 w-4 mr-2" />
+              Download DML
+            </Button>
+          )}
+          {(dwModel?.ddl_statements || dwModel?.dml_statements) && (
+            <Button onClick={downloadComplete} variant="outline" size="sm">
+              <Download className="h-4 w-4 mr-2" />
+              Download Complete
+            </Button>
+          )}
           {onClose && (
             <Button onClick={onClose} variant="ghost" size="sm">
               Close
@@ -169,11 +230,12 @@ export function DataWarehouseViewer({ sqlContent, onClose }: DataWarehouseViewer
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="fact">Fact Table</TabsTrigger>
           <TabsTrigger value="dimensions">Dimensions</TabsTrigger>
           <TabsTrigger value="ddl">DDL Scripts</TabsTrigger>
+          <TabsTrigger value="dml">Sample Data</TabsTrigger>
           <TabsTrigger value="recommendations">Recommendations</TabsTrigger>
         </TabsList>
 
@@ -359,6 +421,41 @@ export function DataWarehouseViewer({ sqlContent, onClose }: DataWarehouseViewer
                   </div>
                 ))}
               </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="dml" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Sample Data (DML)</CardTitle>
+              <CardDescription>
+                Generated SQL INSERT statements with sample data for testing the star schema
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {dwModel.dml_statements ? (
+                <div className="space-y-4">
+                  {Object.entries(dwModel.dml_statements).map(([tableName, dml]: [string, any], index: number) => (
+                    <div key={index} className="space-y-2">
+                      <h4 className="font-medium text-sm text-muted-foreground">
+                        {tableName.replace('insert_', '').replace(/_/g, ' ').toUpperCase()}
+                      </h4>
+                      <div className="bg-muted p-4 rounded-lg">
+                        <pre className="text-sm overflow-x-auto whitespace-pre-wrap">
+                          {dml}
+                        </pre>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <Alert>
+                  <AlertDescription>
+                    No sample data available. DML generation may have been disabled.
+                  </AlertDescription>
+                </Alert>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

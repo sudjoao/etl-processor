@@ -110,6 +110,10 @@ class DimensionalModelingEngine:
             logger.info(f"⭐ [DIM MODEL] Fact table: {star_schema.fact_table.name}")
             logger.info(f"⭐ [DIM MODEL] Dimension tables: {len(star_schema.dimension_tables)}")
 
+            # Add star schema to the list for later use
+            self.star_schemas.append(star_schema)
+            logger.info(f"⭐ [DIM MODEL] Star schema added to engine list. Total schemas: {len(self.star_schemas)}")
+
             # Generate DDL for the star schema
             logger.info("📝 [DIM MODEL] Generating DDL statements...")
             ddl_statements = self._generate_star_schema_ddl(star_schema)
