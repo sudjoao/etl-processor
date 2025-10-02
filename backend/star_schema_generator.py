@@ -66,7 +66,8 @@ class StarSchemaGenerator:
                                include_constraints: bool = True,
                                include_sample_data: bool = False,
                                sample_records: int = 10,
-                               original_sql: str = None) -> Dict[str, Any]:
+                               original_sql: str = None,
+                               csv_data: Dict = None) -> Dict[str, Any]:
         """Generate complete DDL and DML for star schema"""
 
         result = {
@@ -116,8 +117,8 @@ class StarSchemaGenerator:
         result["ddl_statements"].extend(views)
 
         # Generate DML statements
-        if include_sample_data or original_sql:
-            sample_dml = self.generate_sample_dml(star_schema, sample_records, original_sql)
+        if include_sample_data or original_sql or csv_data:
+            sample_dml = self.generate_sample_dml(star_schema, sample_records, original_sql, csv_data)
             result["dml_statements"] = sample_dml
 
         return result
@@ -312,15 +313,15 @@ GROUP BY {', '.join(dim_selects)};
     def _infer_attribute_type(self, attribute_name: str) -> str:
         """Infer data type for dimension attribute"""
         attr_lower = attribute_name.lower()
-        
-        if any(keyword in attr_lower for keyword in ['date', 'time', 'created', 'updated']):
+
+        if any(keyword in attr_lower for keyword in ['flag',  'is_']) or attr_lower.startswith('is_') or attr_lower.startswith('has_'):
+            return 'boolean'
+        elif any(keyword in attr_lower for keyword in ['date', 'time', 'created', 'updated']):
             return 'datetime'
         elif any(keyword in attr_lower for keyword in ['id', 'key', 'number']):
             return 'bigint'
         elif any(keyword in attr_lower for keyword in ['amount', 'price', 'cost', 'value']):
             return 'decimal'
-        elif any(keyword in attr_lower for keyword in ['flag', 'is_', 'has_']):
-            return 'boolean'
         elif any(keyword in attr_lower for keyword in ['description', 'comment', 'note']):
             return 'text'
         else:
@@ -358,13 +359,15 @@ GROUP BY {', '.join(dim_selects)};
 
         return templates
 
-    def generate_sample_dml(self, star_schema: StarSchema, num_records: int = 10, original_sql: str = None) -> Dict[str, str]:
+    def generate_sample_dml(self, star_schema: StarSchema, num_records: int = 10, original_sql: str = None, csv_data: Dict = None) -> Dict[str, str]:
         """Generate DML statements for the star schema using real data when available"""
         dml_statements = {}
 
-        # Extract real data from original SQL if provided
+        # Extract real data from CSV or original SQL if provided
         real_data = {}
-        if original_sql:
+        if csv_data:
+            real_data = self._extract_real_data_from_csv(csv_data)
+        elif original_sql:
             real_data = self._extract_real_data_from_sql(original_sql)
 
         # Only generate DML if we have real data
@@ -418,9 +421,6 @@ GROUP BY {', '.join(dim_selects)};
         for attr in attribute_names:
             if attr in real_values_for_dimension:
                 attribute_values.append(real_values_for_dimension[attr])
-            else:
-                attribute_values.append([f"Unknown_{attr}"])
-
         if attribute_values:
             # Generate all combinations (limited to avoid too many records)
             combinations = list(itertools.product(*attribute_values))[:20]  # Limit to 20 combinations
@@ -431,7 +431,15 @@ GROUP BY {', '.join(dim_selects)};
                 # Add values for each attribute (excluding surrogate key)
                 for j, attr in enumerate(attribute_names):
                     if j < len(combination):
-                        values.append(f"'{combination[j]}'")
+                        value = combination[j]
+                        if value is None:
+                            values.append("NULL")
+                        elif isinstance(value, bool):
+                            values.append("TRUE" if value else "FALSE")
+                        elif isinstance(value, (int, float)):
+                            values.append(str(value))
+                        else:
+                            values.append(f"'{value}'")
                     else:
                         values.append("NULL")
 
@@ -575,6 +583,52 @@ GROUP BY {', '.join(dim_selects)};
                         logger.info(f"🔍 [REAL DATA] Added {col_name}: {clean_value}")
 
         logger.info(f"🔍 [REAL DATA] Final extracted data: {real_data}")
+        return real_data
+
+    def _extract_real_data_from_csv(self, csv_data: Dict) -> Dict[str, Dict[str, List[str]]]:
+        """Extract real data from CSV data structure"""
+        import logging
+
+        logger = logging.getLogger(__name__)
+        real_data = {}
+
+        if not csv_data or 'headers' not in csv_data or 'rows' not in csv_data:
+            logger.warning("🔍 [CSV DATA] Invalid CSV data structure")
+            return real_data
+
+        headers = csv_data['headers']
+        rows = csv_data['rows']
+
+        logger.info(f"🔍 [CSV DATA] Processing CSV with {len(headers)} columns and {len(rows)} rows")
+        logger.info(f"🔍 [CSV DATA] Headers: {headers}")
+
+        # Create a single table entry with all CSV data
+        table_name = "source_data"
+        real_data[table_name] = {}
+
+        # Initialize columns
+        for header in headers:
+            real_data[table_name][header] = []
+
+        # Extract all values
+        for row_idx, row in enumerate(rows):
+            for col_idx, header in enumerate(headers):
+                if col_idx < len(row) and row[col_idx] and row[col_idx].strip():
+                    value = row[col_idx].strip()
+                    # Skip empty values and common null representations
+                    if value and value.lower() not in ['null', 'none', 'n/a', '']:
+                        real_data[table_name][header].append(value)
+
+        # Log extracted data summary
+        for header in headers:
+            unique_values = list(set(real_data[table_name][header]))
+            logger.info(f"🔍 [CSV DATA] Column '{header}': {len(unique_values)} unique values")
+            if len(unique_values) <= 5:
+                logger.info(f"🔍 [CSV DATA] Values: {unique_values}")
+            else:
+                logger.info(f"🔍 [CSV DATA] Sample values: {unique_values[:5]}...")
+
+        logger.info(f"🔍 [CSV DATA] Final extracted data: {list(real_data.keys())}")
         return real_data
 
     def _extract_table_schemas(self, sql_content: str) -> Dict[str, List[str]]:
@@ -778,6 +832,50 @@ GROUP BY {', '.join(dim_selects)};
                 return f"'{random.choice(reasons)}'"
             elif any(keyword in attr_lower for keyword in ['observacao', 'observation', 'comment']):
                 return f"'Observação {random.randint(1, 100)}'"
+            elif any(keyword in attr_lower for keyword in ['date', 'data']) and 'full' in attr_lower:
+                # Handle full_date fields - generate proper date values
+                base_date = datetime(2020, 1, 1)
+                random_days = random.randint(0, 1460)  # 4 years range
+                sample_date = base_date + timedelta(days=random_days)
+                return f"'{sample_date.strftime('%Y-%m-%d')}'"
+            elif any(keyword in attr_lower for keyword in ['date', 'data']) and attr_lower != 'updated_at' and attr_lower != 'created_at':
+                # Handle other date fields
+                if 'key' in attr_lower:
+                    # Date key format: YYYYMMDD
+                    base_date = datetime(2020, 1, 1)
+                    random_days = random.randint(0, 1460)
+                    sample_date = base_date + timedelta(days=random_days)
+                    return f"'{sample_date.strftime('%Y%m%d')}'"
+                else:
+                    return "NULL"  # For unknown date fields, use NULL instead of placeholder text
+            elif any(keyword in attr_lower for keyword in ['day_of_week', 'day_name']):
+                days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+                return f"'{random.choice(days)}'"
+            elif any(keyword in attr_lower for keyword in ['month_name']):
+                months = ['January', 'February', 'March', 'April', 'May', 'June',
+                         'July', 'August', 'September', 'October', 'November', 'December']
+                return f"'{random.choice(months)}'"
+            elif any(keyword in attr_lower for keyword in ['quarter']):
+                quarters = ['Q1', 'Q2', 'Q3', 'Q4']
+                return f"'{random.choice(quarters)}'"
+            elif any(keyword in attr_lower for keyword in ['year']) and attr_lower != 'day_of_year':
+                # Generate realistic years
+                years = ['2018', '2019', '2020', '2021', '2022', '2023', '2024']
+                return f"'{random.choice(years)}'"
+            elif any(keyword in attr_lower for keyword in ['is_weekend', 'is_holiday']):
+                return random.choice(['TRUE', 'FALSE'])
+            elif any(keyword in attr_lower for keyword in ['day_of_month', 'day_of_year', 'week_of_year', 'month_number']):
+                # Generate numeric values for date components
+                if 'day_of_month' in attr_lower:
+                    return str(random.randint(1, 28))
+                elif 'day_of_year' in attr_lower:
+                    return str(random.randint(1, 365))
+                elif 'week_of_year' in attr_lower:
+                    return str(random.randint(1, 52))
+                elif 'month_number' in attr_lower:
+                    return str(random.randint(1, 12))
+                else:
+                    return str(random.randint(1, 100))
             else:
                 # Generic fallback
                 return f"'{attr_name}_{random.randint(1, 100)}'"

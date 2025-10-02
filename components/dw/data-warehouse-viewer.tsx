@@ -11,6 +11,7 @@ import { ApiService } from "@/lib/api"
 
 interface DataWarehouseViewerProps {
   sqlContent: string
+  csvData?: any
   onClose?: () => void
 }
 
@@ -47,7 +48,7 @@ interface StarSchema {
   }
 }
 
-export function DataWarehouseViewer({ sqlContent, onClose }: DataWarehouseViewerProps) {
+export function DataWarehouseViewer({ sqlContent, csvData, onClose }: DataWarehouseViewerProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [dwModel, setDwModel] = useState<any>(null)
@@ -68,9 +69,9 @@ export function DataWarehouseViewer({ sqlContent, onClose }: DataWarehouseViewer
       const result = await ApiService.generateDwModel({
         sql: sqlContent,
         model_name: 'DataWarehouse',
-        dialect: 'mysql',
         include_indexes: true,
-        include_partitioning: false
+        include_partitioning: false,
+        csv_data: csvData
       })
 
       setDwModel(result)

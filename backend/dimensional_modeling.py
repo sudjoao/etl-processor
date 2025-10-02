@@ -170,9 +170,9 @@ class DimensionalModelingEngine:
                 dimension_tables.append(dim_table)
         
         # Add time dimension if not present
-        if not any(self._is_time_dimension(dim) for dim in dimension_tables):
-            time_dim = self._create_time_dimension()
-            dimension_tables.append(time_dim)
+        # if not any(self._is_time_dimension(dim) for dim in dimension_tables):
+        #     time_dim = self._create_time_dimension()
+        #     dimension_tables.append(time_dim)
         
         # Create relationships
         relationships = self._create_relationships(fact_table, dimension_tables)

@@ -82,6 +82,7 @@ export class ApiService {
     model_name?: string
     include_indexes?: boolean
     include_partitioning?: boolean
+    csv_data?: any
   }): Promise<any> {
     return this.makeRequest('/api/generate-dw-model', {
       method: 'POST',
@@ -90,6 +91,7 @@ export class ApiService {
         model_name: options.model_name || 'DataWarehouse',
         include_indexes: options.include_indexes ?? true,
         include_partitioning: options.include_partitioning ?? false,
+        csv_data: options.csv_data,
       }),
     })
   }
@@ -103,5 +105,40 @@ export class ApiService {
 
   static async getDwMetadata(): Promise<any> {
     return this.makeRequest('/api/dw-metadata')
+  }
+
+  // NLQ Session Management API methods
+  static async createNlqSession(metadata?: any): Promise<any> {
+    return this.makeRequest('/api/nlq/session/create', {
+      method: 'POST',
+      body: JSON.stringify({ metadata: metadata || {} }),
+    })
+  }
+
+  static async provisionNlqSession(schemaId: string, sqlContent: string): Promise<any> {
+    return this.makeRequest(`/api/nlq/session/${schemaId}/provision`, {
+      method: 'POST',
+      body: JSON.stringify({ sql: sqlContent }),
+    })
+  }
+
+  static async getNlqSessionInfo(schemaId: string): Promise<any> {
+    return this.makeRequest(`/api/nlq/session/${schemaId}/info`)
+  }
+
+  static async cleanupNlqSession(schemaId: string): Promise<any> {
+    return this.makeRequest(`/api/nlq/session/${schemaId}/cleanup`, {
+      method: 'DELETE',
+    })
+  }
+
+  static async forceCleanupSessions(): Promise<any> {
+    return this.makeRequest('/api/nlq/cleanup/force', {
+      method: 'POST',
+    })
+  }
+
+  static async checkDatabaseHealth(): Promise<any> {
+    return this.makeRequest('/api/database/health')
   }
 }

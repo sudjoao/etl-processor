@@ -425,6 +425,7 @@ export function ExportControls({ csvData, fields, delimiter }: ExportControlsPro
         <div className="mt-8">
           <DataWarehouseViewer
             sqlContent={generatedSql}
+            csvData={csvData}
             onClose={() => setShowDwViewer(false)}
           />
         </div>

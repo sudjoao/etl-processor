@@ -10,6 +10,9 @@ from sql_analyzer import SQLAnalyzer
 from dimensional_modeling import DimensionalModelingEngine
 from star_schema_generator import StarSchemaGenerator
 from ai_dimension_classifier import AIDimensionClassifier
+from database import db_manager, session_manager
+from cleanup_scheduler import start_cleanup_scheduler, stop_cleanup_scheduler
+import atexit
 
 app = Flask(__name__)
 
@@ -23,6 +26,23 @@ CORS(app,
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Start the cleanup scheduler when the app starts
+try:
+    start_cleanup_scheduler()
+    logger.info("Cleanup scheduler started")
+except Exception as e:
+    logger.error(f"Failed to start cleanup scheduler: {e}")
+
+# Register cleanup function to stop scheduler on app shutdown
+def cleanup_on_exit():
+    try:
+        stop_cleanup_scheduler()
+        logger.info("Cleanup scheduler stopped")
+    except Exception as e:
+        logger.error(f"Error stopping cleanup scheduler: {e}")
+
+atexit.register(cleanup_on_exit)
 
 # Request logging middleware
 @app.before_request
@@ -335,6 +355,13 @@ def generate_dw_model():
         include_indexes = data.get('include_indexes', True)
         include_partitioning = data.get('include_partitioning', False)
 
+        # Extract CSV data if provided (for better real data extraction)
+        csv_data = data.get('csv_data', None)
+        app.logger.info(f"🚀 [DW MODEL] CSV data provided: {csv_data is not None}")
+        if csv_data:
+            app.logger.info(f"🚀 [DW MODEL] CSV headers: {csv_data.get('headers', [])}")
+            app.logger.info(f"🚀 [DW MODEL] CSV rows count: {len(csv_data.get('rows', []))}")
+
         app.logger.info(f"🚀 [DW MODEL] Parameters - Model: {model_name}, Dialect: PostgreSQL")
         app.logger.info(f"🚀 [DW MODEL] SQL content length: {len(sql_content)} characters")
 
@@ -365,7 +392,8 @@ def generate_dw_model():
                 include_partitioning=include_partitioning,
                 include_sample_data=False,
                 sample_records=10,
-                original_sql=sql_content
+                original_sql=sql_content,
+                csv_data=csv_data
             )
             app.logger.info(f"🚀 [DW MODEL] Complete schema keys: {list(complete_schema.keys())}")
             model_result['complete_schema'] = complete_schema
@@ -563,5 +591,173 @@ def test_ai_classification():
         return jsonify({'error': f'Error testing AI classification: {str(e)}'}), 500
 
 
+# NLQ Session Management Endpoints
+
+@app.route('/api/nlq/session/create', methods=['POST', 'OPTIONS'])
+def create_nlq_session():
+    """Create a new NLQ session"""
+    if request.method == 'OPTIONS':
+        return '', 200
+
+    try:
+        data = request.get_json() or {}
+        metadata = data.get('metadata', {})
+
+        session_info = session_manager.create_session(metadata)
+
+        app.logger.info(f"Created NLQ session: {session_info['session_id']}")
+
+        return jsonify({
+            'success': True,
+            'session': session_info
+        })
+
+    except Exception as e:
+        app.logger.error(f"Error creating NLQ session: {str(e)}")
+        return jsonify({'error': f'Error creating session: {str(e)}'}), 500
+
+
+@app.route('/api/nlq/session/<schema_id>/provision', methods=['POST', 'OPTIONS'])
+def provision_nlq_session(schema_id):
+    """Provision a session with SQL schema"""
+    if request.method == 'OPTIONS':
+        return '', 200
+
+    try:
+        data = request.get_json()
+
+        if not data or 'sql' not in data:
+            return jsonify({'error': 'SQL content is required'}), 400
+
+        sql_content = data['sql']
+
+        if not sql_content.strip():
+            return jsonify({'error': 'SQL content cannot be empty'}), 400
+
+        provision_result = session_manager.provision_session(schema_id, sql_content)
+
+        app.logger.info(f"Provisioned NLQ session: {schema_id}")
+
+        return jsonify({
+            'success': True,
+            'provision': provision_result
+        })
+
+    except ValueError as e:
+        app.logger.warning(f"Invalid provision request for session {schema_id}: {str(e)}")
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        app.logger.error(f"Error provisioning NLQ session {schema_id}: {str(e)}")
+        return jsonify({'error': f'Error provisioning session: {str(e)}'}), 500
+
+
+@app.route('/api/nlq/session/<schema_id>/info', methods=['GET', 'OPTIONS'])
+def get_nlq_session_info(schema_id):
+    """Get session information"""
+    if request.method == 'OPTIONS':
+        return '', 200
+
+    try:
+        session_info = session_manager.get_session_info(schema_id)
+
+        return jsonify({
+            'success': True,
+            'session': session_info
+        })
+
+    except ValueError as e:
+        app.logger.warning(f"Session not found: {schema_id}")
+        return jsonify({'error': str(e)}), 404
+    except Exception as e:
+        app.logger.error(f"Error getting session info for {schema_id}: {str(e)}")
+        return jsonify({'error': f'Error getting session info: {str(e)}'}), 500
+
+
+@app.route('/api/nlq/session/<schema_id>/cleanup', methods=['DELETE', 'OPTIONS'])
+def cleanup_nlq_session(schema_id):
+    """Cleanup a session"""
+    if request.method == 'OPTIONS':
+        return '', 200
+
+    try:
+        cleanup_result = session_manager.cleanup_session(schema_id)
+
+        app.logger.info(f"Cleaned up NLQ session: {schema_id}")
+
+        return jsonify({
+            'success': True,
+            'cleanup': cleanup_result
+        })
+
+    except ValueError as e:
+        app.logger.warning(f"Session not found for cleanup: {schema_id}")
+        return jsonify({'error': str(e)}), 404
+    except Exception as e:
+        app.logger.error(f"Error cleaning up session {schema_id}: {str(e)}")
+        return jsonify({'error': f'Error cleaning up session: {str(e)}'}), 500
+
+
+@app.route('/api/nlq/cleanup/force', methods=['POST', 'OPTIONS'])
+def force_cleanup_sessions():
+    """Force immediate cleanup of expired sessions"""
+    if request.method == 'OPTIONS':
+        return '', 200
+
+    try:
+        force_cleanup()
+
+        app.logger.info("Forced cleanup of expired sessions")
+
+        return jsonify({
+            'success': True,
+            'message': 'Forced cleanup completed'
+        })
+
+    except Exception as e:
+        app.logger.error(f"Error during forced cleanup: {str(e)}")
+        return jsonify({'error': f'Error during forced cleanup: {str(e)}'}), 500
+
+
+# Database health check endpoint
+@app.route('/api/database/health', methods=['GET', 'OPTIONS'])
+def database_health_check():
+    """Check database connection health"""
+    if request.method == 'OPTIONS':
+        return '', 200
+
+    try:
+        is_healthy = db_manager.test_connection()
+
+        return jsonify({
+            'success': True,
+            'database_healthy': is_healthy,
+            'timestamp': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        app.logger.error(f"Database health check failed: {str(e)}")
+        return jsonify({
+            'success': False,
+            'database_healthy': False,
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
+
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5001, debug=True)
+    # Start the cleanup scheduler when the app starts
+    try:
+        start_cleanup_scheduler()
+        app.logger.info("Cleanup scheduler started")
+    except Exception as e:
+        app.logger.error(f"Failed to start cleanup scheduler: {e}")
+
+    try:
+        app.run(host='0.0.0.0', port=5001, debug=True)
+    finally:
+        # Stop the cleanup scheduler when the app shuts down
+        try:
+            stop_cleanup_scheduler()
+            app.logger.info("Cleanup scheduler stopped")
+        except Exception as e:
+            app.logger.error(f"Error stopping cleanup scheduler: {e}")

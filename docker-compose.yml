@@ -1,4 +1,28 @@
+version: '3.8'
 services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: etl-processor-postgres
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-etl_processor}
+      - POSTGRES_USER=${POSTGRES_USER:-etl_user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-etl_password}
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/init_db.sql:/docker-entrypoint-initdb.d/init_db.sql
+    ports:
+      - "5432:5432"
+    networks:
+      - etl-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-etl_user} -d ${POSTGRES_DB:-etl_processor}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # Backend Flask API
   backend:
     build:
@@ -13,11 +37,28 @@ services:
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
       - AI_MODEL=${AI_MODEL}
       - AI_CLASSIFICATION_ENABLED=${AI_CLASSIFICATION_ENABLED}
+      # PostgreSQL Configuration
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=${POSTGRES_DB:-etl_processor}
+      - POSTGRES_USER=${POSTGRES_USER:-etl_user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-etl_password}
+      # NLQ Configuration
+      - NLQ_MODEL=${NLQ_MODEL}
+      - NLQ_PROVIDER=${NLQ_PROVIDER}
     env_file:
       - .env
     networks:
       - etl-network
+    depends_on:
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
+    mem_limit: 2g
+    deploy:
+      resources:
+        limits:
+          memory: 2g
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5001/api/health"]
       interval: 30s
@@ -48,4 +89,5 @@ networks:
     driver: bridge
 
 volumes:
+  postgres_data:
   node_modules:
