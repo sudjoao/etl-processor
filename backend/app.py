@@ -8,7 +8,7 @@ from typing import List, Dict, Any
 from datetime import datetime
 from sql_analyzer import SQLAnalyzer
 from dimensional_modeling import DimensionalModelingEngine
-from star_schema_generator import StarSchemaGenerator, DatabaseDialect
+from star_schema_generator import StarSchemaGenerator
 from ai_dimension_classifier import AIDimensionClassifier
 
 app = Flask(__name__)
@@ -44,48 +44,23 @@ def after_request(response):
 
 class CSVToSQLTransformer:
     def __init__(self):
-        self.supported_databases = ["ansi", "mysql", "postgresql", "sqlite", "sqlserver"]
+        # PostgreSQL-only transformer
+        pass
     
     def sanitize_identifier(self, name: str) -> str:
         """Sanitize SQL identifier names"""
         return re.sub(r'[^a-zA-Z0-9_]', '_', name).lower()
     
-    def get_sql_type(self, field_format: str, database_type: str) -> str:
-        """Get SQL type based on field format and database type"""
+    def get_sql_type(self, field_format: str) -> str:
+        """Get PostgreSQL SQL type based on field format"""
         type_mapping = {
-            "mysql": {
-                "number": "DECIMAL(10,2)",
-                "currency": "DECIMAL(10,2)",
-                "date": "DATE",
-                "text": "VARCHAR(255)"
-            },
-            "postgresql": {
-                "number": "NUMERIC(10,2)",
-                "currency": "NUMERIC(10,2)",
-                "date": "DATE",
-                "text": "VARCHAR(255)"
-            },
-            "sqlite": {
-                "number": "REAL",
-                "currency": "REAL",
-                "date": "TEXT",
-                "text": "TEXT"
-            },
-            "sqlserver": {
-                "number": "DECIMAL(10,2)",
-                "currency": "MONEY",
-                "date": "DATE",
-                "text": "NVARCHAR(255)"
-            },
-            "ansi": {
-                "number": "DECIMAL(10,2)",
-                "currency": "DECIMAL(10,2)",
-                "date": "DATE",
-                "text": "VARCHAR(255)"
-            }
+            "number": "NUMERIC(10,2)",
+            "currency": "NUMERIC(10,2)",
+            "date": "DATE",
+            "text": "VARCHAR(255)"
         }
-        
-        return type_mapping.get(database_type, type_mapping["ansi"]).get(field_format, "VARCHAR(255)")
+
+        return type_mapping.get(field_format, "VARCHAR(255)")
     
     def escape_value(self, value: str, field_format: str) -> str:
         """Escape SQL values based on field format"""
@@ -165,12 +140,9 @@ class CSVToSQLTransformer:
         except Exception as e:
             raise ValueError(f"Error parsing CSV: {str(e)}")
     
-    def generate_sql(self, csv_data: Dict[str, Any], fields: List[Dict[str, Any]], 
-                    table_name: str, database_type: str, include_create_table: bool = True) -> str:
-        """Generate SQL from CSV data and field configuration"""
-        
-        if database_type not in self.supported_databases:
-            raise ValueError(f"Unsupported database type: {database_type}")
+    def generate_sql(self, csv_data: Dict[str, Any], fields: List[Dict[str, Any]],
+                    table_name: str, include_create_table: bool = True) -> str:
+        """Generate PostgreSQL SQL from CSV data and field configuration"""
         
         # Filter and sort selected fields
         selected_fields = [field for field in fields if field.get("selected", False)]
@@ -206,16 +178,16 @@ class CSVToSQLTransformer:
         
         # CREATE TABLE statement
         if include_create_table:
-            sql += f"-- Criação da tabela\n"
-            sql += f"CREATE TABLE {self._quote_identifier(sanitized_table_name, database_type)} (\n"
-            
+            sql += f"-- Criação da tabela (PostgreSQL)\n"
+            sql += f"CREATE TABLE {self._quote_identifier(sanitized_table_name)} (\n"
+
             columns = []
             for i, field in enumerate(selected_fields):
                 column_name = self.sanitize_identifier(field["name"])
-                sql_type = self.get_sql_type(field.get("format", "text"), database_type)
-                quoted_column = self._quote_identifier(column_name, database_type)
+                sql_type = self.get_sql_type(field.get("format", "text"))
+                quoted_column = self._quote_identifier(column_name)
                 columns.append(f"  {quoted_column} {sql_type}")
-            
+
             sql += ",\n".join(columns) + "\n"
             sql += ");\n\n"
         
@@ -225,11 +197,11 @@ class CSVToSQLTransformer:
         column_names = []
         for field in selected_fields:
             column_name = self.sanitize_identifier(field["name"])
-            quoted_column = self._quote_identifier(column_name, database_type)
+            quoted_column = self._quote_identifier(column_name)
             column_names.append(quoted_column)
-        
+
         columns_str = ", ".join(column_names)
-        quoted_table = self._quote_identifier(sanitized_table_name, database_type)
+        quoted_table = self._quote_identifier(sanitized_table_name)
         
         # Use original data for SQL generation, not formatted data
         for row in csv_data["rows"]:
@@ -245,14 +217,9 @@ class CSVToSQLTransformer:
         
         return sql
     
-    def _quote_identifier(self, identifier: str, database_type: str) -> str:
-        """Quote identifier based on database type"""
-        if database_type == "mysql":
-            return f"`{identifier}`"
-        elif database_type == "postgresql":
-            return f'"{identifier}"'
-        else:
-            return identifier
+    def _quote_identifier(self, identifier: str) -> str:
+        """Quote identifier for PostgreSQL"""
+        return f'"{identifier}"'
 
 # Initialize transformer
 transformer = CSVToSQLTransformer()
@@ -287,7 +254,6 @@ def transform_csv_to_sql():
         fields = data["fields"]
         table_name = data["tableName"]
         delimiter = data["delimiter"]
-        database_type = data.get("databaseType", "ansi")
         include_create_table = data.get("includeCreateTable", True)
         
         # Validate delimiter
@@ -297,12 +263,11 @@ def transform_csv_to_sql():
         # Parse CSV
         csv_data = transformer.parse_csv_content(csv_content, delimiter)
         
-        # Generate SQL
+        # Generate SQL (PostgreSQL only)
         sql_result = transformer.generate_sql(
             csv_data=csv_data,
             fields=fields,
             table_name=table_name,
-            database_type=database_type,
             include_create_table=include_create_table
         )
         
@@ -367,11 +332,10 @@ def generate_dw_model():
 
         sql_content = data['sql']
         model_name = data.get('model_name', 'DataWarehouse')
-        dialect = data.get('dialect', 'mysql')
         include_indexes = data.get('include_indexes', True)
         include_partitioning = data.get('include_partitioning', False)
 
-        app.logger.info(f"🚀 [DW MODEL] Parameters - Model: {model_name}, Dialect: {dialect}")
+        app.logger.info(f"🚀 [DW MODEL] Parameters - Model: {model_name}, Dialect: PostgreSQL")
         app.logger.info(f"🚀 [DW MODEL] SQL content length: {len(sql_content)} characters")
 
         # Initialize dimensional modeling engine
@@ -387,12 +351,7 @@ def generate_dw_model():
             return jsonify(model_result), 400
 
         # Generate optimized DDL
-        try:
-            db_dialect = DatabaseDialect(dialect)
-        except ValueError:
-            db_dialect = DatabaseDialect.MYSQL
-
-        schema_generator = StarSchemaGenerator(db_dialect)
+        schema_generator = StarSchemaGenerator()
         star_schema = modeling_engine.star_schemas[0] if modeling_engine.star_schemas else None
 
         app.logger.info(f"🚀 [DW MODEL] Star schemas available: {len(modeling_engine.star_schemas)}")
@@ -510,7 +469,7 @@ def get_dw_metadata():
 
     try:
         metadata = {
-            'supported_dialects': [dialect.value for dialect in DatabaseDialect],
+            'supported_dialects': ['postgresql'],  # PostgreSQL only
             'modeling_features': {
                 'star_schema': True,
                 'snowflake_schema': False,  # Future enhancement

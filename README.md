@@ -162,7 +162,7 @@ Content-Type: application/json
   ],
   "tableName": "funcionarios",
   "delimiter": ",",
-  "databaseType": "mysql",
+  "databaseType": "postgresql",
   "includeCreateTable": true
 }
 ```
@@ -222,7 +222,7 @@ POST /api/analyze-sql
 POST /api/generate-dw-model
 {
   "sql": "CREATE TABLE vendas (...)",
-  "dialect": "mysql"
+  "dialect": "postgresql"
 }
 
 # Obter recomendações
@@ -256,12 +256,8 @@ GET /api/dw-metadata
 - **Moeda**: Formata como valor monetário (R$)
 - **Data**: Converte YYYY-MM-DD para DD/MM/YYYY
 
-### Bancos de Dados Suportados
-- ANSI SQL
-- MySQL
-- PostgreSQL
-- SQLite
-- SQL Server
+### Banco de Dados Suportado
+- **PostgreSQL** (único banco suportado para garantir compatibilidade total)
 
 ### Modelos de IA Suportados (OpenRouter)
 - `anthropic/claude-3.5-sonnet` (recomendado)

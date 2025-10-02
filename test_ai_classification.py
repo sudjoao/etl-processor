@@ -45,7 +45,7 @@ def test_dw_generation():
     payload = {
         "sql": sql_content,
         "model_name": "MoviesDataWarehouse",
-        "dialect": "mysql",
+        "dialect": "postgresql",
         "include_indexes": True,
         "include_partitioning": False
     }

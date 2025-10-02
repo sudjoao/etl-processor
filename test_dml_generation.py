@@ -45,7 +45,7 @@ def test_dml_generation():
     
     # Initialize engines
     modeling_engine = DimensionalModelingEngine()
-    schema_generator = StarSchemaGenerator(DatabaseDialect.MYSQL)
+    schema_generator = StarSchemaGenerator(DatabaseDialect.POSTGRESQL)
     
     # Create dimensional model
     print("📊 Creating dimensional model...")

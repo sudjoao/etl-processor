@@ -80,7 +80,6 @@ export class ApiService {
   static async generateDwModel(options: {
     sql: string
     model_name?: string
-    dialect?: string
     include_indexes?: boolean
     include_partitioning?: boolean
   }): Promise<any> {
@@ -89,7 +88,6 @@ export class ApiService {
       body: JSON.stringify({
         sql: options.sql,
         model_name: options.model_name || 'DataWarehouse',
-        dialect: options.dialect || 'mysql',
         include_indexes: options.include_indexes ?? true,
         include_partitioning: options.include_partitioning ?? false,
       }),

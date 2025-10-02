@@ -1,22 +1,11 @@
 """
 Star Schema Generator
-Advanced DDL generation for optimized data warehouse schemas
+Advanced DDL generation for PostgreSQL data warehouse schemas
 """
 
 from typing import Dict, List, Any
 from dataclasses import dataclass
-from enum import Enum
 from dimensional_modeling import StarSchema, FactTable, DimensionTable
-
-
-class DatabaseDialect(Enum):
-    """Supported database dialects for DDL generation"""
-    MYSQL = "mysql"
-    POSTGRESQL = "postgresql"
-    SQLSERVER = "sqlserver"
-    SNOWFLAKE = "snowflake"
-    BIGQUERY = "bigquery"
-    REDSHIFT = "redshift"
 
 
 @dataclass
@@ -39,67 +28,36 @@ class PartitionDefinition:
 
 
 class StarSchemaGenerator:
-    """Generates optimized DDL for star schema implementations"""
-    
-    def __init__(self, dialect: DatabaseDialect = DatabaseDialect.MYSQL):
-        self.dialect = dialect
+    """Generates optimized DDL for PostgreSQL star schema implementations"""
+
+    def __init__(self):
         self.type_mappings = self._get_type_mappings()
-        
-    def _get_type_mappings(self) -> Dict[str, Dict[str, str]]:
-        """Get data type mappings for different database dialects"""
+
+    def _quote_identifier(self, identifier: str) -> str:
+        """Return identifier without quotes (PostgreSQL standard identifiers)"""
+        return identifier
+
+    def _get_type_mappings(self) -> Dict[str, str]:
+        """Get PostgreSQL data type mappings"""
         return {
-            DatabaseDialect.MYSQL.value: {
-                "surrogate_key": "BIGINT AUTO_INCREMENT",
-                "natural_key": "VARCHAR(100)",
-                "string": "VARCHAR(255)",
-                "text": "TEXT",
-                "integer": "INT",
-                "bigint": "BIGINT",
-                "decimal": "DECIMAL(18,2)",
-                "date": "DATE",
-                "datetime": "DATETIME",
-                "timestamp": "TIMESTAMP",
-                "boolean": "BOOLEAN"
-            },
-            DatabaseDialect.POSTGRESQL.value: {
-                "surrogate_key": "BIGSERIAL",
-                "natural_key": "VARCHAR(100)",
-                "string": "VARCHAR(255)",
-                "text": "TEXT",
-                "integer": "INTEGER",
-                "bigint": "BIGINT",
-                "decimal": "NUMERIC(18,2)",
-                "date": "DATE",
-                "datetime": "TIMESTAMP",
-                "timestamp": "TIMESTAMP WITH TIME ZONE",
-                "boolean": "BOOLEAN"
-            },
-            DatabaseDialect.SQLSERVER.value: {
-                "surrogate_key": "BIGINT IDENTITY(1,1)",
-                "natural_key": "NVARCHAR(100)",
-                "string": "NVARCHAR(255)",
-                "text": "NVARCHAR(MAX)",
-                "integer": "INT",
-                "bigint": "BIGINT",
-                "decimal": "DECIMAL(18,2)",
-                "date": "DATE",
-                "datetime": "DATETIME2",
-                "timestamp": "DATETIME2",
-                "boolean": "BIT"
-            },
-            DatabaseDialect.SNOWFLAKE.value: {
-                "surrogate_key": "NUMBER AUTOINCREMENT",
-                "natural_key": "VARCHAR(100)",
-                "string": "VARCHAR(255)",
-                "text": "VARCHAR(16777216)",
-                "integer": "NUMBER(10,0)",
-                "bigint": "NUMBER(19,0)",
-                "decimal": "NUMBER(18,2)",
-                "date": "DATE",
-                "datetime": "TIMESTAMP_NTZ",
-                "timestamp": "TIMESTAMP_TZ",
-                "boolean": "BOOLEAN"
-            }
+            "surrogate_key": "BIGSERIAL",
+            "natural_key": "VARCHAR(100)",
+            "string": "VARCHAR(255)",
+            "text": "TEXT",
+            "integer": "INTEGER",
+            "bigint": "BIGINT",
+            "decimal": "NUMERIC(18,2)",
+            "date": "DATE",
+            "datetime": "TIMESTAMP",
+            "timestamp": "TIMESTAMP WITH TIME ZONE",
+            "boolean": "BOOLEAN",
+            "tinyint": "SMALLINT",
+            "mediumtext": "TEXT",
+            "longtext": "TEXT",
+            "double": "DOUBLE PRECISION",
+            "float": "REAL",
+            "json": "JSONB",
+            "uuid": "UUID"
         }
     
     def generate_complete_schema(self, star_schema: StarSchema,
@@ -113,7 +71,7 @@ class StarSchemaGenerator:
 
         result = {
             "schema_name": star_schema.name,
-            "dialect": self.dialect.value,
+            "dialect": "postgresql",
             "ddl_statements": [],
             "dml_statements": {},
             "indexes": [],
@@ -166,7 +124,7 @@ class StarSchemaGenerator:
     
     def _generate_dimension_table_ddl(self, dim_table: DimensionTable) -> str:
         """Generate DDL for dimension table"""
-        type_map = self.type_mappings[self.dialect.value]
+        type_map = self.type_mappings
         
         ddl = f"-- {dim_table.description}\n"
         ddl += f"CREATE TABLE {dim_table.name} (\n"
@@ -207,7 +165,7 @@ class StarSchemaGenerator:
     
     def _generate_fact_table_ddl(self, fact_table: FactTable, dimension_tables: List[DimensionTable]) -> str:
         """Generate DDL for fact table"""
-        type_map = self.type_mappings[self.dialect.value]
+        type_map = self.type_mappings
         
         ddl = f"-- {fact_table.description}\n"
         ddl += f"-- Grain: {fact_table.grain}\n"
@@ -303,7 +261,7 @@ class StarSchemaGenerator:
         # Partition fact table by date if date dimension exists
         date_dims = [dim for dim in star_schema.dimension_tables if 'date' in dim.name.lower()]
         
-        if date_dims and self.dialect in [DatabaseDialect.POSTGRESQL, DatabaseDialect.MYSQL]:
+        if date_dims:  # PostgreSQL supports partitioning
             date_key = date_dims[0].surrogate_key
             partition_ddl = f"""
 -- Partition fact table by date for better performance
@@ -777,7 +735,7 @@ GROUP BY {', '.join(dim_selects)};
         import logging
         from datetime import datetime, timedelta
 
-        type_map = self.type_mappings[self.dialect.value]
+        type_map = self.type_mappings
 
         # Extract unique values from real data for this dimension
         real_values_for_dimension = self._extract_dimension_values_from_real_data(

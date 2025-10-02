@@ -80,7 +80,7 @@ def test_comprehensive():
                     print(f"📊 Dimension tables: {len(star_schema.dimension_tables)}")
 
                 # Test schema generator
-                schema_generator = StarSchemaGenerator(DatabaseDialect.MYSQL)
+                schema_generator = StarSchemaGenerator(DatabaseDialect.POSTGRESQL)
 
                 complete_schema = schema_generator.generate_complete_schema(
                     star_schema,

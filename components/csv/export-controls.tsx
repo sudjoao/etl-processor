@@ -20,7 +20,7 @@ interface ExportControlsProps {
   delimiter: DelimiterType
 }
 
-type SQLDatabaseType = "ansi" | "mysql" | "postgresql" | "sqlite" | "sqlserver"
+// PostgreSQL is the only supported database type
 type ExportFormatType = "csv" | "tsv" | "txt" | "sql"
 
 export function ExportControls({ csvData, fields, delimiter }: ExportControlsProps) {
@@ -29,7 +29,7 @@ export function ExportControls({ csvData, fields, delimiter }: ExportControlsPro
   const [isExporting, setIsExporting] = useState(false)
   const [exportComplete, setExportComplete] = useState(false)
   const [exportError, setExportError] = useState<string | null>(null)
-  const [sqlDatabaseType, setSqlDatabaseType] = useState<SQLDatabaseType>("ansi")
+  // PostgreSQL is the only supported database type
   const [createTable, setCreateTable] = useState(true)
   const [tableName, setTableName] = useState("dados_importados")
   const [showDwViewer, setShowDwViewer] = useState(false)
@@ -78,62 +78,16 @@ export function ExportControls({ csvData, fields, delimiter }: ExportControlsPro
     }
 
     const getSQLType = (field: FieldConfig) => {
-      switch (sqlDatabaseType) {
-        case "mysql":
-          switch (field.format) {
-            case "number":
-              return "DECIMAL(10,2)"
-            case "currency":
-              return "DECIMAL(10,2)"
-            case "date":
-              return "DATE"
-            default:
-              return "VARCHAR(255)"
-          }
-        case "postgresql":
-          switch (field.format) {
-            case "number":
-              return "NUMERIC(10,2)"
-            case "currency":
-              return "NUMERIC(10,2)"
-            case "date":
-              return "DATE"
-            default:
-              return "VARCHAR(255)"
-          }
-        case "sqlite":
-          switch (field.format) {
-            case "number":
-              return "REAL"
-            case "currency":
-              return "REAL"
-            case "date":
-              return "TEXT"
-            default:
-              return "TEXT"
-          }
-        case "sqlserver":
-          switch (field.format) {
-            case "number":
-              return "DECIMAL(10,2)"
-            case "currency":
-              return "MONEY"
-            case "date":
-              return "DATE"
-            default:
-              return "NVARCHAR(255)"
-          }
-        default: // ANSI
-          switch (field.format) {
-            case "number":
-              return "DECIMAL(10,2)"
-            case "currency":
-              return "DECIMAL(10,2)"
-            case "date":
-              return "DATE"
-            default:
-              return "VARCHAR(255)"
-          }
+      // PostgreSQL data types only
+      switch (field.format) {
+        case "number":
+          return "NUMERIC(10,2)"
+        case "currency":
+          return "NUMERIC(10,2)"
+        case "date":
+          return "DATE"
+        default:
+          return "VARCHAR(255)"
       }
     }
 
@@ -154,31 +108,15 @@ export function ExportControls({ csvData, fields, delimiter }: ExportControlsPro
 
     if (createTable) {
       const sanitizedTableName = sanitizeIdentifier(tableName)
-      sql += `-- Criação da tabela\n`
-
-      if (sqlDatabaseType === "mysql") {
-        sql += `DROP TABLE IF EXISTS \`${sanitizedTableName}\`;\n`
-        sql += `CREATE TABLE \`${sanitizedTableName}\` (\n`
-      } else if (sqlDatabaseType === "postgresql") {
-        sql += `DROP TABLE IF EXISTS "${sanitizedTableName}" CASCADE;\n`
-        sql += `CREATE TABLE "${sanitizedTableName}" (\n`
-      } else {
-        sql += `DROP TABLE IF EXISTS ${sanitizedTableName};\n`
-        sql += `CREATE TABLE ${sanitizedTableName} (\n`
-      }
+      sql += `-- Criação da tabela (PostgreSQL)\n`
+      sql += `DROP TABLE IF EXISTS "${sanitizedTableName}" CASCADE;\n`
+      sql += `CREATE TABLE "${sanitizedTableName}" (\n`
 
       const columns = selectedFields.map((field, index) => {
         const columnName = sanitizeIdentifier(field.name)
         const sqlType = getSQLType(field)
         const isLast = index === selectedFields.length - 1
-
-        if (sqlDatabaseType === "mysql") {
-          return `  \`${columnName}\` ${sqlType}${isLast ? "" : ","}`
-        } else if (sqlDatabaseType === "postgresql") {
-          return `  "${columnName}" ${sqlType}${isLast ? "" : ","}`
-        } else {
-          return `  ${columnName} ${sqlType}${isLast ? "" : ","}`
-        }
+        return `  "${columnName}" ${sqlType}${isLast ? "" : ","}`
       })
 
       sql += columns.join("\n") + "\n"
@@ -191,26 +129,13 @@ export function ExportControls({ csvData, fields, delimiter }: ExportControlsPro
     const columnNames = selectedFields
       .map((field) => {
         const columnName = sanitizeIdentifier(field.name)
-        if (sqlDatabaseType === "mysql") {
-          return `\`${columnName}\``
-        } else if (sqlDatabaseType === "postgresql") {
-          return `"${columnName}"`
-        } else {
-          return columnName
-        }
+        return `"${columnName}"`  // PostgreSQL quoted identifiers
       })
       .join(", ")
 
     data.rows.forEach((row) => {
       const values = row.map((cell, index) => escapeValue(cell, selectedFields[index])).join(", ")
-
-      if (sqlDatabaseType === "mysql") {
-        sql += `INSERT INTO \`${sanitizedTableName}\` (${columnNames}) VALUES (${values});\n`
-      } else if (sqlDatabaseType === "postgresql") {
-        sql += `INSERT INTO "${sanitizedTableName}" (${columnNames}) VALUES (${values});\n`
-      } else {
-        sql += `INSERT INTO ${sanitizedTableName} (${columnNames}) VALUES (${values});\n`
-      }
+      sql += `INSERT INTO "${sanitizedTableName}" (${columnNames}) VALUES (${values});\n`
     })
 
     return sql
@@ -249,7 +174,7 @@ export function ExportControls({ csvData, fields, delimiter }: ExportControlsPro
           fields,
           tableName,
           delimiter,
-          databaseType: sqlDatabaseType,
+          databaseType: "postgresql",  // Only PostgreSQL supported
           includeCreateTable: createTable
         })
 
@@ -305,22 +230,7 @@ export function ExportControls({ csvData, fields, delimiter }: ExportControlsPro
     }
   }
 
-  const getSQLDatabaseLabel = (type: SQLDatabaseType) => {
-    switch (type) {
-      case "ansi":
-        return "ANSI SQL (Padrão)"
-      case "mysql":
-        return "MySQL"
-      case "postgresql":
-        return "PostgreSQL"
-      case "sqlite":
-        return "SQLite"
-      case "sqlserver":
-        return "SQL Server"
-      default:
-        return type
-    }
-  }
+
 
   return (
     <div className="space-y-6">
@@ -364,19 +274,13 @@ export function ExportControls({ csvData, fields, delimiter }: ExportControlsPro
 
             {exportFormat === "sql" && (
               <div className="space-y-2">
-                <Label htmlFor="sql-database">Formato do banco de dados</Label>
-                <Select value={sqlDatabaseType} onValueChange={(value) => setSqlDatabaseType(value as SQLDatabaseType)}>
-                  <SelectTrigger id="sql-database">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ansi">{getSQLDatabaseLabel("ansi")}</SelectItem>
-                    <SelectItem value="mysql">{getSQLDatabaseLabel("mysql")}</SelectItem>
-                    <SelectItem value="postgresql">{getSQLDatabaseLabel("postgresql")}</SelectItem>
-                    <SelectItem value="sqlite">{getSQLDatabaseLabel("sqlite")}</SelectItem>
-                    <SelectItem value="sqlserver">{getSQLDatabaseLabel("sqlserver")}</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label htmlFor="sql-database">Banco de dados</Label>
+                <div className="p-3 bg-muted rounded-md">
+                  <span className="text-sm font-medium">PostgreSQL</span>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Único banco de dados suportado para garantir compatibilidade total
+                  </p>
+                </div>
               </div>
             )}
           </div>
@@ -431,7 +335,7 @@ export function ExportControls({ csvData, fields, delimiter }: ExportControlsPro
               {exportFormat === "sql" ? (
                 <>
                   <div className="text-2xl font-bold text-primary">
-                    {getSQLDatabaseLabel(sqlDatabaseType).split(" ")[0]}
+                    PostgreSQL
                   </div>
                   <div className="text-sm text-muted-foreground">Banco</div>
                 </>

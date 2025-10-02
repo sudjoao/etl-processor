@@ -51,10 +51,11 @@ class StarSchema:
 class DimensionalModelingEngine:
     """Engine for creating dimensional models from relational data"""
     
-    def __init__(self):
+    def __init__(self, dialect: str = "postgresql"):
         self.sql_analyzer = SQLAnalyzer()
         self.ai_classifier = AIDimensionClassifier()
         self.star_schemas: List[StarSchema] = []
+        self.dialect = dialect
 
         # Common dimension patterns (fallback when AI is not available)
         self.time_dimension_patterns = [
@@ -412,7 +413,7 @@ class DimensionalModelingEngine:
         """Generate DDL for dimension table"""
         ddl = f"-- {dim_table.description}\n"
         ddl += f"CREATE TABLE {dim_table.name} (\n"
-        ddl += f"    {dim_table.surrogate_key} INT IDENTITY(1,1) PRIMARY KEY,\n"
+        ddl += f"    {dim_table.surrogate_key} BIGSERIAL PRIMARY KEY,\n"
         
         for attr in dim_table.attributes:
             if attr == dim_table.natural_key:
@@ -426,8 +427,8 @@ class DimensionalModelingEngine:
             ddl += "    expiry_date DATE,\n"
             ddl += "    is_current BOOLEAN DEFAULT TRUE,\n"
         
-        ddl += "    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\n"
-        ddl += "    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP\n"
+        ddl += "    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,\n"
+        ddl += "    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP\n"
         ddl += ");\n\n"
         
         # Add indexes
@@ -442,14 +443,14 @@ class DimensionalModelingEngine:
         
         # Add dimension foreign keys
         for dim_table in dimension_tables:
-            ddl += f"    {dim_table.surrogate_key} INT NOT NULL,\n"
-        
+            ddl += f"    {dim_table.surrogate_key} BIGINT NOT NULL,\n"
+
         # Add measures
         for measure in fact_table.measures:
-            ddl += f"    {measure} DECIMAL(18,2),\n"
-        
-        ddl += "    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\n"
-        ddl += "    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\n"
+            ddl += f"    {measure} NUMERIC(18,2),\n"
+
+        ddl += "    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,\n"
+        ddl += "    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,\n"
         
         # Add composite primary key
         pk_columns = [dim.surrogate_key for dim in dimension_tables]
