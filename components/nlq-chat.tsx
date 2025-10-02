@@ -5,8 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Badge } from "@/components/ui/badge"
-import { ScrollArea } from "@radix-ui/react-scroll-area"
+import * as ScrollAreaPrimitive from "@radix-ui/react-scroll-area"
 import { 
   Send, 
   Loader2, 
@@ -192,7 +191,7 @@ export default function NLQChat({ sessionId, schemaName }: NLQChatProps) {
   }
 
   return (
-    <Card className="w-full">
+    <Card className="w-full h-[70vh] flex flex-col">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <MessageSquare className="h-5 w-5" />
@@ -202,10 +201,12 @@ export default function NLQChat({ sessionId, schemaName }: NLQChatProps) {
           Ask questions about your data in natural language
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <ScrollArea className="h-[500px] pr-4" ref={scrollAreaRef}>
-          <div className="space-y-4">
-            {messages.map((message) => (
+      <CardContent className="flex-1 flex flex-col gap-4 min-h-0 overflow-hidden">
+        <div className="flex-1 min-h-0 overflow-hidden border rounded-lg">
+          <ScrollAreaPrimitive.Root className="h-full w-full overflow-hidden">
+            <ScrollAreaPrimitive.Viewport className="h-full w-full" ref={scrollAreaRef}>
+              <div className="space-y-4 p-4">
+                {messages.map((message) => (
               <div
                 key={message.id}
                 className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
@@ -252,37 +253,47 @@ export default function NLQChat({ sessionId, schemaName }: NLQChatProps) {
                 </div>
               </div>
             )}
+              </div>
+            </ScrollAreaPrimitive.Viewport>
+            <ScrollAreaPrimitive.Scrollbar
+              className="flex touch-none select-none transition-colors p-0.5 bg-transparent hover:bg-muted"
+              orientation="vertical"
+            >
+              <ScrollAreaPrimitive.Thumb className="flex-1 bg-border rounded-full relative before:content-[''] before:absolute before:top-1/2 before:left-1/2 before:-translate-x-1/2 before:-translate-y-1/2 before:w-full before:h-full before:min-w-[44px] before:min-h-[44px]" />
+            </ScrollAreaPrimitive.Scrollbar>
+          </ScrollAreaPrimitive.Root>
+        </div>
+
+        <div className="flex-shrink-0">
+          {error && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+
+          <form onSubmit={handleSubmit} className="flex gap-2">
+            <Input
+              ref={inputRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="Ask a question about your data..."
+              disabled={isLoading}
+              className="flex-1"
+            />
+            <Button type="submit" disabled={isLoading || !input.trim()}>
+              {isLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
+            </Button>
+          </form>
+
+          <div className="flex items-center gap-2 text-xs text-muted-foreground mt-2">
+            <Database className="h-3 w-3" />
+            <span>Connected to schema: {schemaName}</span>
           </div>
-        </ScrollArea>
-
-        {error && (
-          <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
-
-        <form onSubmit={handleSubmit} className="flex gap-2">
-          <Input
-            ref={inputRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask a question about your data..."
-            disabled={isLoading}
-            className="flex-1"
-          />
-          <Button type="submit" disabled={isLoading || !input.trim()}>
-            {isLoading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Send className="h-4 w-4" />
-            )}
-          </Button>
-        </form>
-
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Database className="h-3 w-3" />
-          <span>Connected to schema: {schemaName}</span>
         </div>
       </CardContent>
     </Card>
