@@ -141,4 +141,14 @@ export class ApiService {
   static async checkDatabaseHealth(): Promise<any> {
     return this.makeRequest('/api/database/health')
   }
+
+  static async queryNlqSession(schemaId: string, question: string, conversationHistory?: any[]): Promise<any> {
+    return this.makeRequest(`/api/nlq/session/${schemaId}/query`, {
+      method: 'POST',
+      body: JSON.stringify({
+        question,
+        conversation_history: conversationHistory || []
+      }),
+    })
+  }
 }

@@ -19,6 +19,7 @@ import {
   Info
 } from "lucide-react"
 import { ApiService } from "@/lib/api"
+import NLQChat from "@/components/nlq-chat"
 
 interface SessionInfo {
   session_id: string
@@ -270,6 +271,14 @@ export default function ConfiguracaoExploracaoTab() {
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {/* NLQ Chat Interface - Only show when session is provisioned */}
+      {sessionInfo && sessionInfo.status === 'provisioned' && (
+        <NLQChat
+          sessionId={sessionInfo.session_id}
+          schemaName={sessionInfo.schema_name}
+        />
       )}
 
       {/* File Upload */}

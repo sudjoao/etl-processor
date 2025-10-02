@@ -11,6 +11,7 @@ from dimensional_modeling import DimensionalModelingEngine
 from star_schema_generator import StarSchemaGenerator
 from ai_dimension_classifier import AIDimensionClassifier
 from database import db_manager, session_manager
+from nlq_service import nlq_service
 from cleanup_scheduler import start_cleanup_scheduler, stop_cleanup_scheduler
 import atexit
 
@@ -695,6 +696,55 @@ def cleanup_nlq_session(schema_id):
     except Exception as e:
         app.logger.error(f"Error cleaning up session {schema_id}: {str(e)}")
         return jsonify({'error': f'Error cleaning up session: {str(e)}'}), 500
+
+
+@app.route('/api/nlq/session/<schema_id>/query', methods=['POST', 'OPTIONS'])
+def nlq_query(schema_id):
+    """Process natural language query for a session"""
+    if request.method == 'OPTIONS':
+        return '', 200
+
+    try:
+        data = request.get_json()
+
+        if not data or 'question' not in data:
+            return jsonify({'error': 'Question is required'}), 400
+
+        question = data['question']
+        conversation_history = data.get('conversation_history', [])
+
+        if not question.strip():
+            return jsonify({'error': 'Question cannot be empty'}), 400
+
+        # Get session info to verify it exists and is provisioned
+        session_info = session_manager.get_session_info(schema_id)
+
+        if session_info['status'] != 'provisioned':
+            return jsonify({'error': 'Session must be provisioned before querying'}), 400
+
+        schema_name = session_info['schema_name']
+
+        # Process the query with AI
+        app.logger.info(f"Processing NLQ query for session {schema_id}: {question[:100]}...")
+        result = nlq_service.query_with_ai(schema_name, question, conversation_history)
+
+        app.logger.info(f"NLQ query processed for session {schema_id}")
+
+        return jsonify({
+            'success': result.get('success', False),
+            'response': result.get('ai_response', ''),
+            'sql_query': result.get('sql_query'),
+            'query_result': result.get('query_result'),
+            'error': result.get('error'),
+            'timestamp': result.get('timestamp')
+        })
+
+    except ValueError as e:
+        app.logger.warning(f"Invalid NLQ query request for session {schema_id}: {str(e)}")
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        app.logger.error(f"Error processing NLQ query for session {schema_id}: {str(e)}")
+        return jsonify({'error': f'Error processing query: {str(e)}'}), 500
 
 
 @app.route('/api/nlq/cleanup/force', methods=['POST', 'OPTIONS'])
